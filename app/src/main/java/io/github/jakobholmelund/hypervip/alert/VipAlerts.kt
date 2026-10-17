@@ -168,7 +168,7 @@ object VipAlerts {
         if (onlySource != null && source != onlySource.name) return
         if (onlyAppKey != null && prefs.getString(KEY_APP_KEY, null) != onlyAppKey) return
         app.stopService(Intent(app, RingService::class.java))
-        Ringer.stop(app)
+        Ringer.stop()
         app.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_RINGING)
         AudioState.release(app, HOLDER_CALL)
         prefs.edit(commit = true) {

@@ -19,6 +19,10 @@ import io.github.jakobholmelund.hypervip.R
  * Plays VIP alerts the way alarm clock apps do: our own MediaPlayer on the alarm stream. HyperOS
  * silent mode mutes notification sounds whatever their audio attributes, but not alarm playback.
  * Tries the chosen ringtone, then the phone's ringtone and alarm sound, then a bundled sound.
+ *
+ * Android only cancels a vibration, or abandons audio focus, through the same Vibrator or
+ * AudioManager instance that started it, and those instances differ per Context. So everything
+ * goes through the application context, and the instances in use are kept until [stop].
  */
 object Ringer {
     private const val TAG = "HyperVip"
@@ -32,21 +36,20 @@ object Ringer {
     private val messagePattern = longArrayOf(0, 250, 150, 250)
 
     private var player: MediaPlayer? = null
-    private var focus: AudioFocusRequest? = null
+    private var vibrator: Vibrator? = null
+    private var focus: Pair<AudioManager, AudioFocusRequest>? = null
     private var ringing = false
-
-    val isRinging: Boolean
-        @Synchronized get() = ringing
 
     /** Rings in a loop until [stop]. */
     @Synchronized
     fun startRinging(context: Context, ringtone: Uri?) {
-        stop(context)
+        val app = context.applicationContext
+        stop()
         val sources = listOfNotNull(ringtone, Settings.System.DEFAULT_RINGTONE_URI, Settings.System.DEFAULT_ALARM_ALERT_URI)
-        player = createPlayer(context, sources, R.raw.vip_ring, looping = true)?.also { it.start() }
+        player = createPlayer(app, sources, R.raw.vip_ring, looping = true)?.also { it.start() }
         if (player == null) Log.w(TAG, "No playable ringtone")
-        requestFocus(context)
-        vibrate(context, ringPattern, repeat = 0)
+        requestFocus(app)
+        vibrate(app, ringPattern, repeat = 0)
         ringing = true
     }
 
@@ -54,36 +57,43 @@ object Ringer {
     @Synchronized
     fun playOnce(context: Context, onDone: () -> Unit) {
         if (ringing) return onDone()
-        stop(context)
-        val sources = listOf(Settings.System.DEFAULT_NOTIFICATION_URI)
-        val once = createPlayer(context, sources, R.raw.vip_message, looping = false)
-        if (once == null) return onDone()
+        val app = context.applicationContext
+        stop()
+        val once = createPlayer(app, listOf(Settings.System.DEFAULT_NOTIFICATION_URI), R.raw.vip_message, looping = false)
+            ?: return onDone()
         player = once
         once.setOnCompletionListener {
             synchronized(this) {
+                // Leave the short vibration to finish on its own.
                 if (player === it) {
                     it.release()
                     player = null
-                    abandonFocus(context)
+                    abandonFocus()
                 }
             }
             onDone()
         }
-        requestFocus(context)
+        requestFocus(app)
         once.start()
-        vibrate(context, messagePattern, repeat = -1)
+        vibrate(app, messagePattern, repeat = -1)
     }
 
     @Synchronized
-    fun stop(context: Context) {
+    fun stop() {
         player?.let {
             runCatching { it.stop() }
             it.release()
         }
         player = null
-        abandonFocus(context)
-        if (ringing) vibrator(context)?.cancel()
+        vibrator?.cancel()
+        vibrator = null
+        abandonFocus()
         ringing = false
+    }
+
+    private fun abandonFocus() {
+        focus?.let { (am, request) -> runCatching { am.abandonAudioFocusRequest(request) } }
+        focus = null
     }
 
     private fun createPlayer(context: Context, sources: List<Uri>, fallback: Int, looping: Boolean): MediaPlayer? {
@@ -107,33 +117,27 @@ object Ringer {
     }
 
     private fun requestFocus(context: Context) {
+        val am = context.getSystemService(AudioManager::class.java)
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(alarm)
             .build()
         // Pauses music while a VIP rings. Failing to get focus doesn't stop the alert.
-        runCatching { context.getSystemService(AudioManager::class.java).requestAudioFocus(request) }
-        focus = request
-    }
-
-    private fun abandonFocus(context: Context) {
-        val request = focus ?: return
-        runCatching { context.getSystemService(AudioManager::class.java).abandonAudioFocusRequest(request) }
-        focus = null
+        runCatching { am.requestAudioFocus(request) }
+        focus = am to request
     }
 
     private fun vibrate(context: Context, pattern: LongArray, repeat: Int) {
-        val vibrator = vibrator(context) ?: return
+        val device = context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+            ?.takeIf { it.hasVibrator() } ?: return
         val effect = VibrationEffect.createWaveform(pattern, repeat)
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+                device.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(effect, alarm)
+                device.vibrate(effect, alarm)
             }
         }
+        vibrator = device
     }
-
-    private fun vibrator(context: Context): Vibrator? =
-        context.getSystemService(VibratorManager::class.java)?.defaultVibrator?.takeIf { it.hasVibrator() }
 }

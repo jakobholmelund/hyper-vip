@@ -36,7 +36,7 @@ class RingService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(giveUp)
-        Ringer.stop(this)
+        Ringer.stop()
         super.onDestroy()
     }
 
