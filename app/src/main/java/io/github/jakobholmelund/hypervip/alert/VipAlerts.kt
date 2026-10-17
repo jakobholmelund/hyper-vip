@@ -197,7 +197,9 @@ object VipAlerts {
         EventLog.log(app, if (isTest) "Test message alert played" else "Message from $name — alerted")
     }
 
-    fun testRing(context: Context) = startAlert(context, "Test", Source.TEST)
+    fun testRing(context: Context) {
+        if (!isActive(context)) startAlert(context, "Test", Source.TEST)
+    }
 
     fun ringingNotification(context: Context, title: String, text: String): Notification {
         val stop = stopIntent(context)
