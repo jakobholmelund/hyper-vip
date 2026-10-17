@@ -95,17 +95,23 @@ object VipAlerts {
             EventLog.log(context, "${vip.name} is calling while you're on another call — leaving the call-waiting tone to the phone")
             return
         }
-        if (phoneWillRing(am, nm)) {
+        val ringerAudible = am.ringerMode == AudioManager.RINGER_MODE_NORMAL &&
+            am.getStreamVolume(AudioManager.STREAM_RING) > 0
+        if (ringerAudible && nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALL) {
             EventLog.log(context, "${vip.name} is calling — the phone isn't silenced, so it rings normally")
             return
         }
-        // Do Not Disturb may already let this caller through (starred contacts, repeat callers),
-        // so give the phone a moment to start ringing by itself.
-        SystemClock.sleep(RING_CHECK_DELAY_MS)
-        if (CallTracker.state(context) != TelephonyManager.EXTRA_STATE_RINGING) return
-        if (isRingtonePlaying(am)) {
-            EventLog.log(context, "${vip.name} is calling — Do Not Disturb already lets the call ring")
-            return
+        if (ringerAudible) {
+            // Only Do Not Disturb is in the way, and it may already let this caller through
+            // (starred contacts, repeat callers): give the phone a moment to start ringing.
+            // In silent or vibrate mode a ringtone player can't be heard (it may even be a
+            // haptics-only one), so there's nothing to wait for.
+            SystemClock.sleep(RING_CHECK_DELAY_MS)
+            if (CallTracker.state(context) != TelephonyManager.EXTRA_STATE_RINGING) return
+            if (isRingtonePlaying(am)) {
+                EventLog.log(context, "${vip.name} is calling — Do Not Disturb already lets the call ring")
+                return
+            }
         }
         startAlert(context, vip.name, Source.PHONE)
     }
@@ -216,11 +222,6 @@ object VipAlerts {
     }
 
     fun canNotify(context: Context): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled()
-
-    private fun phoneWillRing(am: AudioManager, nm: NotificationManager): Boolean =
-        am.ringerMode == AudioManager.RINGER_MODE_NORMAL &&
-            nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALL &&
-            am.getStreamVolume(AudioManager.STREAM_RING) > 0
 
     private fun isRingtonePlaying(am: AudioManager): Boolean =
         am.activePlaybackConfigurations.any {
