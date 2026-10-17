@@ -35,7 +35,8 @@ for pkg in root.iter("remotePackage"):
 fi
 
 export ANDROID_HOME="$SDK"
-yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+# Newer command-line tools don't ask about licenses and exit early, which breaks `yes`'s pipe.
+(yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1) || true
 "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
 
 # The wrapper's distribution download can be blocked in sandboxes; an installed Gradle of the
