@@ -4,6 +4,20 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Release signing key: a keystore file, or the keystore base64-encoded (e.g. from a cloud
+# environment variable). It's private and never committed.
+if [ -z "${HYPERVIP_KEYSTORE_PATH:-}" ] && [ -n "${HYPERVIP_KEYSTORE_BASE64:-}" ]; then
+  keystore_dir=$(mktemp -d)
+  trap 'rm -rf "$keystore_dir"' EXIT
+  printf '%s' "$HYPERVIP_KEYSTORE_BASE64" | base64 -d > "$keystore_dir/release.jks"
+  export HYPERVIP_KEYSTORE_PATH="$keystore_dir/release.jks"
+fi
+if [ -z "${HYPERVIP_KEYSTORE_PATH:-}" ] || [ -z "${HYPERVIP_KEYSTORE_PASSWORD:-}" ]; then
+  echo "No signing key. Set HYPERVIP_KEYSTORE_BASE64 (or HYPERVIP_KEYSTORE_PATH) and" >&2
+  echo "HYPERVIP_KEYSTORE_PASSWORD; see README, \"Signing\"." >&2
+  exit 1
+fi
+
 # The version code is the commit count, which a shallow clone would undercount.
 if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
   git fetch --quiet --unshallow

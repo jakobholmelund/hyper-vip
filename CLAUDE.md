@@ -6,6 +6,10 @@
   It needs `dl.google.com`; if a cloud session's network policy blocks it, ask the user to add
   that domain to the environment's allowed domains. Don't use GitHub Actions — the user doesn't
   want it. Deliver the APK to the user as a file (they install from their phone).
+- Signing: the release key comes from the `HYPERVIP_KEYSTORE_BASE64` and
+  `HYPERVIP_KEYSTORE_PASSWORD` environment variables (set in the user's cloud environment). Never
+  commit a keystore, print the key material, or sign with a new key — a different key means the
+  user has to uninstall. If the variables are missing, ask the user to add them.
 - The pure-Kotlin matching code in `match/Matching.kt` and its tests also compile with a plain
   Kotlin/JVM project, without the Android SDK.
 - `targetSdk` stays at 34 on purpose (see README, "Why targetSdk is 34"). Lint's

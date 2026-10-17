@@ -31,13 +31,16 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            // A private key can be supplied through CI secrets; otherwise the key committed in
-            // signing/ is used so updates install over each other (see README).
-            storeFile = env("HYPERVIP_KEYSTORE_PATH")?.let { file(it) } ?: rootProject.file("signing/hyper-vip.jks")
-            storePassword = env("HYPERVIP_KEYSTORE_PASSWORD") ?: "hypervip"
-            keyAlias = env("HYPERVIP_KEY_ALIAS") ?: "hypervip"
-            keyPassword = env("HYPERVIP_KEY_PASSWORD") ?: "hypervip"
+        // The release key is private and never in the repo; scripts/build-apk.sh provides it
+        // from the environment (see README, "Signing"). Without it the release APK is unsigned.
+        val keystore = env("HYPERVIP_KEYSTORE_PATH")
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = env("HYPERVIP_KEYSTORE_PASSWORD")
+                keyAlias = env("HYPERVIP_KEY_ALIAS") ?: "hypervip"
+                keyPassword = env("HYPERVIP_KEY_PASSWORD") ?: env("HYPERVIP_KEYSTORE_PASSWORD")
+            }
         }
     }
 
@@ -46,7 +49,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

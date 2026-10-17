@@ -89,10 +89,17 @@ each build installs over the previous one.
 
 ### Signing
 
-APKs are signed with `signing/hyper-vip.jks` (password `hypervip`), which is committed so that
-builds from any machine install over each other. Because the repository is public, anyone could
-sign an APK with this key, so only install Hyper VIP from this repository.
+Release APKs are signed with a private key that is never committed. `scripts/build-apk.sh`
+refuses to build without it. Provide it with either:
 
-To sign with a private key instead, set `HYPERVIP_KEYSTORE_PATH`, `HYPERVIP_KEYSTORE_PASSWORD`,
-`HYPERVIP_KEY_ALIAS` and `HYPERVIP_KEY_PASSWORD` before building. Android won't install an
-update signed with a different key, so uninstall the app once after switching.
+- `HYPERVIP_KEYSTORE_BASE64`: the PKCS12 keystore, base64-encoded on one line (convenient as a
+  cloud environment variable), or `HYPERVIP_KEYSTORE_PATH`: a path to the keystore file
+- `HYPERVIP_KEYSTORE_PASSWORD`: its password
+- optionally `HYPERVIP_KEY_ALIAS` (default `hypervip`) and `HYPERVIP_KEY_PASSWORD` (default: the
+  keystore password)
+
+Keep a backup of the keystore and password. Android only installs an update signed with the same
+key, so losing it means uninstalling and setting the app up again.
+
+Early builds were signed with a key that was committed to this repository (now removed). That
+key is public, so don't trust any APK signed with it.
