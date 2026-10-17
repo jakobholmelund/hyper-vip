@@ -6,10 +6,14 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// CI passes its run number so every published APK installs as an update over the previous one.
-val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-
 fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotEmpty() }
+
+// The commit count only grows, so every build installs as an update over the previous one.
+val buildNumber = env("HYPERVIP_VERSION_CODE")?.toIntOrNull()
+    ?: runCatching {
+        providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }
+            .standardOutput.asText.get().trim().toInt()
+    }.getOrDefault(1)
 
 android {
     namespace = "io.github.jakobholmelund.hypervip"

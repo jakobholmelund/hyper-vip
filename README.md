@@ -6,14 +6,15 @@ works for WhatsApp, Signal and Telegram calls, and plays a sound for VIPs' messa
 
 ## Install
 
-1. On your phone, open
-   **https://github.com/jakobholmelund/hyper-vip/releases/latest/download/hyper-vip.apk**
-   (or the [Releases](https://github.com/jakobholmelund/hyper-vip/releases) page).
-2. Open the downloaded file and allow your browser to install apps when HyperOS asks.
+Hyper VIP isn't on any app store (see "Why not the Play Store" below).
+
+1. Get `hyper-vip.apk` from the [Releases](https://github.com/jakobholmelund/hyper-vip/releases)
+   page, or build it yourself (see "Building").
+2. Open the file on your phone and allow installing apps when HyperOS asks.
 3. Open **Hyper VIP** and work through the **Setup** card. Every step has a button that opens
    the right screen.
 
-Each push to the repo builds a new release. Newer APKs install over older ones and keep your VIPs.
+Newer APKs install over older ones and keep your VIPs.
 
 ## Setup on HyperOS
 
@@ -64,24 +65,30 @@ state; they can only add their own rules, and the most restrictive rule wins. Th
 fallback relies on the old behaviour, so the app targets API 34. It is sideloaded, so Google
 Play's target SDK requirement doesn't apply.
 
+### Why not the Play Store
+
+Google Play only allows call log access for a few kinds of apps (default dialers, caller ID,
+spam blockers), and Android only reveals who is calling to apps with that access. Play also
+requires a newer `targetSdk`. Sideloading avoids both.
+
 ## Building
 
-There's nothing to install locally: GitHub Actions builds every push
-(`.github/workflows/build.yml`), runs the unit tests, uploads the APK and publishes a release.
-
-To build on a computer you need JDK 17 and the Android SDK (platform 36). Run:
+You need Linux or macOS with JDK 17+ and access to `dl.google.com`. Run:
 
 ```sh
-./gradlew testDebugUnitTest assembleRelease
+scripts/build-apk.sh
 ```
+
+It installs the Android SDK into `~/android-sdk` if it isn't there, runs the unit tests and
+writes the signed APK to `dist/hyper-vip.apk`. The version code is the git commit count, so
+each build installs over the previous one.
 
 ### Signing
 
-Releases are signed with `signing/hyper-vip.jks` (password `hypervip`), which is committed so
-that every CI build can install over the previous one. Because the repository is public, anyone
-could sign an APK with this key, so only install Hyper VIP from this repository's releases.
+APKs are signed with `signing/hyper-vip.jks` (password `hypervip`), which is committed so that
+builds from any machine install over each other. Because the repository is public, anyone could
+sign an APK with this key, so only install Hyper VIP from this repository.
 
-To use a private key, add these repository secrets: `HYPERVIP_KEYSTORE_BASE64` (the keystore,
-base64-encoded), `HYPERVIP_KEYSTORE_PASSWORD`, `HYPERVIP_KEY_ALIAS` and `HYPERVIP_KEY_PASSWORD`.
-Android won't install an update signed with a different key, so uninstall the app once after
-switching.
+To sign with a private key instead, set `HYPERVIP_KEYSTORE_PATH`, `HYPERVIP_KEYSTORE_PASSWORD`,
+`HYPERVIP_KEY_ALIAS` and `HYPERVIP_KEY_PASSWORD` before building. Android won't install an
+update signed with a different key, so uninstall the app once after switching.
