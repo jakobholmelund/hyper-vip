@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.StatusBarNotification
-import android.telecom.TelecomManager
 import android.util.Log
 import io.github.jakobholmelund.hypervip.alert.AudioState
 import io.github.jakobholmelund.hypervip.alert.VipAlerts
@@ -18,12 +17,12 @@ import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.match.VipMatcher
 
 /**
- * Watches other apps' notifications for VIP calls (WhatsApp, Signal, Telegram, …) and messages.
- * Being bound by the system also keeps Hyper VIP's process alive, which helps on HyperOS.
+ * Watches other apps' notifications for VIP messages, and for VIP calls where the system passes
+ * them on (HyperOS doesn't for WhatsApp; see [CallWatcherService]). Being bound by the system
+ * also keeps Hyper VIP's process alive, which helps on HyperOS.
  */
 class VipNotificationListener : NotificationListenerService() {
     private val lastMessageAlert = HashMap<String, Long>()
-    private val loggedOngoing = HashSet<String>()
     private val loggedOther = HashSet<String>()
 
     override fun onListenerConnected() {
@@ -41,72 +40,34 @@ class VipNotificationListener : NotificationListenerService() {
             return
         }
         val settings = SettingsStore.get(this)
-        if (!settings.enabled || (!settings.appCallAlerts && !settings.messageAlerts)) return
+        if (!settings.enabled) return
         val notification = sbn.notification ?: return
         if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
         try {
-            if (isCallNotification(sbn)) onCallNotification(sbn, settings)
-            else onOtherNotification(sbn, settings)
+            when {
+                AppCalls.isCallNotification(sbn.packageName, notification) ->
+                    AppCalls.onCallNotification(this, sbn.packageName, notification, sbn.key)
+                notification.category == Notification.CATEGORY_MISSED_CALL ->
+                    AppCalls.onMissedCall(this, sbn.packageName)
+                else -> onOtherNotification(sbn, settings)
+            }
         } catch (e: Exception) {
             Log.w("HyperVip", "Failed to handle notification from ${sbn.packageName}", e)
-            EventLog.log(this, "Error reading a ${appName(sbn.packageName)} notification: ${e.javaClass.simpleName}: ${e.message}")
+            EventLog.log(this, "Error reading a ${AppCalls.appName(sbn.packageName)} notification: ${e.javaClass.simpleName}: ${e.message}")
         }
-    }
-
-    private fun isCallNotification(sbn: StatusBarNotification): Boolean {
-        val notification = sbn.notification
-        if (notification.category == Notification.CATEGORY_CALL) return true
-        if (notification.extras.containsKey(EXTRA_CALL_TYPE)) return true
-        // Not every calling app labels its ringing notification; a full-screen one from a calling
-        // app is its incoming-call screen.
-        return sbn.packageName in APP_NAMES && notification.fullScreenIntent != null
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        loggedOngoing.remove(sbn.key)
         loggedOther.remove(sbn.key)
-        VipAlerts.stopAlert(this, "call ended", onlySource = VipAlerts.Source.APP, onlyAppKey = sbn.key)
-    }
-
-    private fun onCallNotification(sbn: StatusBarNotification, settings: AppSettings) {
-        // Cellular calls are handled from the call-state broadcast, which has the real number.
-        if (isPhoneApp(sbn.packageName)) return
-        val notification = sbn.notification
-        val app = appName(sbn.packageName)
-        if (!settings.appCallAlerts) {
-            if (loggedOngoing.add(sbn.key)) EventLog.log(this, "$app call ignored — “Calls in other apps” is off")
-            return
+        val notification = sbn.notification ?: return
+        if (AppCalls.isCallNotification(sbn.packageName, notification)) {
+            VipAlerts.stopAlert(this, "call ended", onlySource = VipAlerts.Source.APP, onlyAppKey = sbn.packageName)
         }
-        val extras = notification.extras
-        val shown = listOfNotNull(
-            extras.getCharSequence(Notification.EXTRA_TITLE),
-            extras.getCharSequence(Notification.EXTRA_TEXT),
-        ).joinToString(" / ") { "“$it”" }
-        if (!isIncomingCall(notification)) {
-            // The incoming-call notification turning into an ongoing-call one means it was answered.
-            VipAlerts.stopAlert(this, "call answered", onlySource = VipAlerts.Source.APP, onlyAppKey = sbn.key)
-            if (loggedOngoing.add(sbn.key)) EventLog.log(this, "$app call notification $shown looks like an ongoing call")
-            return
-        }
-        if (VipAlerts.isActive(this)) {
-            if (loggedOngoing.add(sbn.key)) EventLog.log(this, "$app call $shown — already ringing for another call")
-            return
-        }
-        val vip = VipMatcher.byNotification(this, notification) ?: VipMatcher.byNameMention(this, notification)
-        if (vip == null) {
-            EventLog.log(this, "$app call $shown — no VIP found in it")
-            return
-        }
-        if (!isSilenced()) {
-            EventLog.log(this, "${vip.name} is calling on $app — the phone isn't silenced, so $app rings itself")
-            return
-        }
-        VipAlerts.startAlert(this, vip.name, VipAlerts.Source.APP, sbn.key)
     }
 
     private fun onOtherNotification(sbn: StatusBarNotification, settings: AppSettings) {
         val notification = sbn.notification
-        if (sbn.packageName in APP_NAMES && notification.category != Notification.CATEGORY_MESSAGE &&
+        if (sbn.packageName in AppCalls.APP_NAMES && notification.category != Notification.CATEGORY_MESSAGE &&
             loggedOther.add(sbn.key)
         ) {
             // Calling apps that ring without a recognisable call notification show up here.
@@ -114,7 +75,7 @@ class VipNotificationListener : NotificationListenerService() {
             val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT)
             EventLog.log(
                 this,
-                "${appName(sbn.packageName)} notification “$title” / “$text” " +
+                "${AppCalls.appName(sbn.packageName)} notification “$title” / “$text” " +
                     "(category ${notification.category ?: "none"}) — not treated as a call",
             )
         }
@@ -131,19 +92,6 @@ class VipNotificationListener : NotificationListenerService() {
         VipAlerts.messageAlert(this, vip.name)
     }
 
-    /**
-     * Whether other apps' calls would be quiet. Calling apps play their own ringtone, which Do Not
-     * Disturb can mute at the audio level even when it lets the notification through, so any Do
-     * Not Disturb mode counts.
-     */
-    private fun isSilenced(): Boolean {
-        val audio = getSystemService(AudioManager::class.java)
-        val nm = getSystemService(NotificationManager::class.java)
-        return audio.ringerMode != AudioManager.RINGER_MODE_NORMAL ||
-            audio.getStreamVolume(AudioManager.STREAM_RING) == 0 ||
-            nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
-    }
-
     /** True when Do Not Disturb didn't hold the notification back and the ringer is on. */
     private fun wasAlertedNormally(sbn: StatusBarNotification): Boolean {
         val ranking = Ranking()
@@ -153,66 +101,22 @@ class VipNotificationListener : NotificationListenerService() {
             audio.ringerMode == AudioManager.RINGER_MODE_NORMAL
     }
 
-    private fun isIncomingCall(notification: Notification): Boolean {
-        val extras = notification.extras
-        when (extras.getInt(EXTRA_CALL_TYPE, CALL_TYPE_UNKNOWN)) {
-            CALL_TYPE_INCOMING, CALL_TYPE_SCREENING -> return true
-            CALL_TYPE_ONGOING -> return false
-        }
-        // Without CallStyle, a running call timer is the tell-tale sign of an answered call.
-        return !extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)
-    }
-
-    private fun isPhoneApp(pkg: String): Boolean {
-        if (pkg in PHONE_PACKAGES) return true
-        val dialer = runCatching { getSystemService(TelecomManager::class.java).defaultDialerPackage }.getOrNull()
-        return pkg == dialer
-    }
-
-    private fun appName(pkg: String): String = APP_NAMES[pkg] ?: pkg
-
     companion object {
         /** Whether the system currently has the listener bound; shown in the app for troubleshooting. */
         @Volatile
         var connected = false
             private set
 
+        private const val MESSAGE_COOLDOWN_MS = 20_000L
+
         /** HyperOS sometimes drops the listener's binding; ask for it back if access is granted. */
         fun ensureBound(context: Context) {
             if (connected) return
             val component = ComponentName(context, VipNotificationListener::class.java)
             val nm = context.getSystemService(NotificationManager::class.java)
-            if (nm.isNotificationListenerAccessGranted(component)) runCatching { NotificationListenerService.requestRebind(component) }
+            if (nm.isNotificationListenerAccessGranted(component)) {
+                runCatching { NotificationListenerService.requestRebind(component) }
+            }
         }
-
-        private const val MESSAGE_COOLDOWN_MS = 20_000L
-
-        // Values of the CallStyle extras (Notification.EXTRA_CALL_TYPE and CallStyle.CALL_TYPE_*).
-        private const val EXTRA_CALL_TYPE = "android.callType"
-        private const val CALL_TYPE_UNKNOWN = 0
-        private const val CALL_TYPE_INCOMING = 1
-        private const val CALL_TYPE_ONGOING = 2
-        private const val CALL_TYPE_SCREENING = 3
-
-        private val PHONE_PACKAGES = setOf(
-            "com.android.incallui",
-            "com.android.phone",
-            "com.android.server.telecom",
-            "com.android.dialer",
-            "com.android.contacts", // HyperOS's own Phone app
-            "com.google.android.dialer",
-        )
-
-        private val APP_NAMES = mapOf(
-            "com.whatsapp" to "WhatsApp",
-            "com.whatsapp.w4b" to "WhatsApp Business",
-            "org.thoughtcrime.securesms" to "Signal",
-            "org.telegram.messenger" to "Telegram",
-            "com.facebook.orca" to "Messenger",
-            "com.viber.voip" to "Viber",
-            "com.skype.raider" to "Skype",
-            "com.microsoft.teams" to "Teams",
-            "com.google.android.apps.tachyon" to "Google Meet",
-        )
     }
 }

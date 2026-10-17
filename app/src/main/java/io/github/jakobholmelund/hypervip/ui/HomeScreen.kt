@@ -71,7 +71,7 @@ import io.github.jakobholmelund.hypervip.data.LogEntry
 import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.data.VipContact
 import io.github.jakobholmelund.hypervip.data.VipStore
-import io.github.jakobholmelund.hypervip.notify.OngoingVisibility
+import io.github.jakobholmelund.hypervip.notify.CallWatcherService
 import io.github.jakobholmelund.hypervip.notify.VipNotificationListener
 import io.github.jakobholmelund.hypervip.system.Need
 import io.github.jakobholmelund.hypervip.system.SetupChecks
@@ -388,7 +388,7 @@ private data class SoundState(
     val alarmVolume: Int,
     val alarmMax: Int,
     val listenerRunning: Boolean,
-    val seesAppCalls: Boolean?,
+    val callWatcherOn: Boolean,
 )
 
 private fun readSoundState(context: Context): SoundState {
@@ -412,7 +412,7 @@ private fun readSoundState(context: Context): SoundState {
         alarmVolume = am.getStreamVolume(AudioManager.STREAM_ALARM),
         alarmMax = am.getStreamMaxVolume(AudioManager.STREAM_ALARM),
         listenerRunning = VipNotificationListener.connected,
-        seesAppCalls = OngoingVisibility.result(context),
+        callWatcherOn = CallWatcherService.isEnabled(context),
     )
 }
 
@@ -431,14 +431,7 @@ private fun SoundStateCard(sound: SoundState) {
         )
         InfoRow("Alarm volume", "${sound.alarmVolume} of ${sound.alarmMax}")
         InfoRow("Notification access", if (sound.listenerRunning) "Running" else "Not running")
-        InfoRow(
-            "Sees WhatsApp-style calls",
-            when (sound.seesAppCalls) {
-                true -> "Yes"
-                false -> "No — see Setup"
-                null -> "Tap Test ring to check"
-            },
-        )
+        InfoRow("Accessibility call watcher", if (sound.callWatcherOn) "On" else "Off")
     }
 }
 

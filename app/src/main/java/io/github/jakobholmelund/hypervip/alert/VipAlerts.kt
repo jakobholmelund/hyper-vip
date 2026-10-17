@@ -45,6 +45,8 @@ object VipAlerts {
 
     /** Unanswered calls normally go to voicemail well before this. */
     private const val CALL_TIMEOUT_MS = 90_000L
+    /** WhatsApp gives up on an unanswered call after about a minute. */
+    private const val APP_CALL_TIMEOUT_MS = 60_000L
     private const val TEST_RING_MS = 8_000L
     private const val MESSAGE_HOLD_MS = 10_000L
 
@@ -122,11 +124,16 @@ object VipAlerts {
             Source.APP -> "VIP call in another app — ringing through silent mode and Do Not Disturb"
             Source.TEST -> "This is what a VIP call sounds like. Tap to stop."
         }
-        val timeout = if (source == Source.TEST) TEST_RING_MS else CALL_TIMEOUT_MS
+        val timeout = when (source) {
+            Source.PHONE -> CALL_TIMEOUT_MS
+            Source.APP -> APP_CALL_TIMEOUT_MS
+            Source.TEST -> TEST_RING_MS
+        }
         val intent = Intent(app, RingService::class.java)
             .putExtra(RingService.EXTRA_TITLE, title)
             .putExtra(RingService.EXTRA_TEXT, text)
             .putExtra(RingService.EXTRA_TIMEOUT_MS, timeout)
+            .putExtra(RingService.EXTRA_APP_CALL, source == Source.APP)
         val started = System.currentTimeMillis()
         try {
             ContextCompat.startForegroundService(app, intent)

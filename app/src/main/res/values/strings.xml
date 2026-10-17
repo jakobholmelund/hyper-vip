@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Hyper VIP</string>
+    <string name="call_watcher_label">Hyper VIP call watcher</string>
+    <string name="call_watcher_description">Spots incoming calls from your VIPs in WhatsApp, Signal, Telegram and other calling apps, so they ring through silent mode. It only watches those apps. While a VIP rings, pressing a volume button silences it.</string>
 </resources>

@@ -71,6 +71,11 @@ object VipMatcher {
             Notification.EXTRA_BIG_TEXT,
             Notification.EXTRA_CONVERSATION_TITLE,
         ).mapNotNull { extras.getCharSequence(it) }
+        return byTextMention(context, texts)
+    }
+
+    /** A VIP whose name appears in any of [texts], longest names first. */
+    fun byTextMention(context: Context, texts: List<CharSequence>): VipContact? {
         if (texts.isEmpty()) return null
         return VipStore.get(context)
             .sortedByDescending { it.name.length }

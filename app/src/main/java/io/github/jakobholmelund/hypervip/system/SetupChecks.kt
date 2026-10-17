@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import io.github.jakobholmelund.hypervip.alert.VipAlerts
 import io.github.jakobholmelund.hypervip.data.AppSettings
 import io.github.jakobholmelund.hypervip.data.SettingsStore
+import io.github.jakobholmelund.hypervip.notify.CallWatcherService
 import io.github.jakobholmelund.hypervip.notify.OngoingVisibility
 import io.github.jakobholmelund.hypervip.notify.VipNotificationListener
 
@@ -96,6 +97,18 @@ object SetupChecks {
             need = Need.RECOMMENDED,
             done = nm.isNotificationListenerAccessGranted(ComponentName(context, VipNotificationListener::class.java)),
             action = SystemSettings::openNotificationAccess,
+        )
+        items += SetupItem(
+            key = "accessibility",
+            title = "Accessibility: catch WhatsApp calls",
+            description = "HyperOS hides WhatsApp's ringing notification from notification access, so " +
+                "Hyper VIP needs accessibility to spot VIP calls in WhatsApp, Signal and Telegram. It " +
+                "only watches those apps. Open Accessibility → Downloaded apps → Hyper VIP call watcher. " +
+                "If it's greyed out, use App info → ⋮ → Allow restricted settings first.",
+            need = Need.RECOMMENDED,
+            done = CallWatcherService.isEnabled(context),
+            actionLabel = "Open",
+            action = SystemSettings::openAccessibility,
         )
         if (OngoingVisibility.result(context) == false) {
             items += SetupItem(

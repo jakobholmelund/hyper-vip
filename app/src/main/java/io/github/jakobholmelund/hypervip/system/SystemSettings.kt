@@ -19,6 +19,9 @@ object SystemSettings {
     fun openAppDetails(context: Context) =
         start(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context)))
 
+    fun openAccessibility(context: Context) =
+        start(context, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+
     fun openDndAccess(context: Context) =
         start(context, Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
 

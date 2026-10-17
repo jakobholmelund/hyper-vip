@@ -25,6 +25,7 @@ Newer APKs install over older ones and keep your VIPs.
 | Notifications | The VIP ring is a notification that plays on the alarm channel. |
 | Battery: no restrictions | Otherwise HyperOS puts the app to sleep and it misses calls. If the standard prompt does nothing, use **HyperOS settings** and pick **No restrictions**. |
 | Autostart | HyperOS only delivers incoming-call events to apps with Autostart on. Android can't check this, so tap **It's on** once you've enabled it. |
+| Accessibility (recommended) | HyperOS doesn't pass WhatsApp's ringing notification to notification access. The *Hyper VIP call watcher* accessibility service sees it instead, only for calling apps. While a VIP rings, a volume button press silences it. |
 | Notification access (recommended) | Needed for WhatsApp, Signal and Telegram calls and for messages. It also keeps the app alive on HyperOS. |
 | Do Not Disturb access (optional) | Only needed if your Do Not Disturb blocks alarms or uses *Total silence*. |
 
