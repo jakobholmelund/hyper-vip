@@ -56,7 +56,7 @@ object SetupChecks {
             items += SetupItem(
                 key = "notifications",
                 title = "Notifications",
-                description = "Hyper VIP rings by showing a notification that plays on the alarm channel.",
+                description = "Shows who is calling while a VIP rings, with a button to silence it.",
                 need = Need.REQUIRED,
                 done = VipAlerts.canNotify(context),
                 permissions = listOf(Manifest.permission.POST_NOTIFICATIONS),

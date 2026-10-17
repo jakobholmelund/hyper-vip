@@ -10,6 +10,6 @@
   Kotlin/JVM project, without the Android SDK.
 - `targetSdk` stays at 34 on purpose (see README, "Why targetSdk is 34"). Lint's
   `ExpiredTargetSdkVersion` is disabled for that reason.
-- VIP ringing is an insistent notification on an alarm-usage channel (`alert/VipAlerts.kt`).
-  Notification channel settings are fixed once created, so changing a channel's sound or
-  attributes needs a new channel id.
+- VIP ringing is our own MediaPlayer on the alarm stream (`alert/Ringer.kt`) inside a
+  foreground service (`alert/RingService.kt`). Don't go back to ringing via notification sounds
+  with alarm attributes: tested on a real HyperOS phone, silent mode muted them.

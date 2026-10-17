@@ -3,7 +3,11 @@ package io.github.jakobholmelund.hypervip.ui
 import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
+import android.media.RingtoneManager
+import android.net.Uri
+import android.provider.Settings
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import androidx.core.content.IntentCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.jakobholmelund.hypervip.alert.AudioState
@@ -66,6 +71,7 @@ import io.github.jakobholmelund.hypervip.data.LogEntry
 import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.data.VipContact
 import io.github.jakobholmelund.hypervip.data.VipStore
+import io.github.jakobholmelund.hypervip.notify.VipNotificationListener
 import io.github.jakobholmelund.hypervip.system.Need
 import io.github.jakobholmelund.hypervip.system.SetupChecks
 import io.github.jakobholmelund.hypervip.system.SetupItem
@@ -327,10 +333,48 @@ private fun AlertsCard(settings: AppSettings) {
                 Text("Test message")
             }
         }
-        TextButton(onClick = { SystemSettings.openCallAlertSettings(context) }) {
-            Text("Change VIP ringtone or vibration")
-        }
+        Spacer(Modifier.height(8.dp))
+        RingtoneRow(settings)
     }
+}
+
+@Composable
+private fun RingtoneRow(settings: AppSettings) {
+    val context = LocalContext.current
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val picked = result.data?.let {
+            IntentCompat.getParcelableExtra(it, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+        }
+        // "Default" means follow the phone's ringtone, which is what no choice means too.
+        val choice = picked?.takeIf { it != Settings.System.DEFAULT_RINGTONE_URI }
+        SettingsStore.update(context) { it.copy(ringtoneUri = choice) }
+    }
+    val name = remember(settings.ringtoneUri) { ringtoneName(context, settings.ringtoneUri) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("VIP ringtone", style = MaterialTheme.typography.bodyLarge)
+            Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = {
+            val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+                .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_RINGTONE)
+                .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "VIP ringtone")
+                .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                .putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, Settings.System.DEFAULT_RINGTONE_URI)
+                .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                .putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                    settings.ringtoneUri ?: Settings.System.DEFAULT_RINGTONE_URI,
+                )
+            runCatching { picker.launch(intent) }
+        }) { Text("Change") }
+    }
+}
+
+private fun ringtoneName(context: Context, uri: Uri?): String {
+    if (uri == null) return "Same as your phone's ringtone"
+    return runCatching { RingtoneManager.getRingtone(context, uri)?.getTitle(context) }.getOrNull() ?: "Custom sound"
 }
 
 private data class SoundState(
@@ -340,13 +384,12 @@ private data class SoundState(
     val dndAccess: Boolean,
     val alarmVolume: Int,
     val alarmMax: Int,
-    val callSoundOn: Boolean,
+    val listenerRunning: Boolean,
 )
 
 private fun readSoundState(context: Context): SoundState {
     val am = context.getSystemService(AudioManager::class.java)
     val nm = context.getSystemService(NotificationManager::class.java)
-    val channel = nm.getNotificationChannel(VipAlerts.CHANNEL_CALLS)
     return SoundState(
         ringer = when (am.ringerMode) {
             AudioManager.RINGER_MODE_SILENT -> "Silent"
@@ -364,8 +407,7 @@ private fun readSoundState(context: Context): SoundState {
         dndAccess = nm.isNotificationPolicyAccessGranted,
         alarmVolume = am.getStreamVolume(AudioManager.STREAM_ALARM),
         alarmMax = am.getStreamMaxVolume(AudioManager.STREAM_ALARM),
-        callSoundOn = VipAlerts.canNotify(context) && channel != null &&
-            channel.importance >= NotificationManager.IMPORTANCE_DEFAULT && channel.sound != null,
+        listenerRunning = VipNotificationListener.connected,
     )
 }
 
@@ -383,7 +425,7 @@ private fun SoundStateCard(sound: SoundState) {
             },
         )
         InfoRow("Alarm volume", "${sound.alarmVolume} of ${sound.alarmMax}")
-        InfoRow("VIP call sound", if (sound.callSoundOn) "On" else "Off — check VIP ringtone settings")
+        InfoRow("Notification access", if (sound.listenerRunning) "Running" else "Not running")
     }
 }
 

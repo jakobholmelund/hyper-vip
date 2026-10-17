@@ -41,19 +41,22 @@ let through, so Hyper VIP rings on the alarm channel:
 
 1. When a call comes in, Android sends `PHONE_STATE` with the caller's number. Hyper VIP checks
    it against your VIPs using the same contacts lookup the dialer uses for caller ID.
-2. If the phone is silenced, it waits about a second to see if the phone rings anyway (for
-   example because Do Not Disturb allows starred contacts). If it doesn't, Hyper VIP posts a
-   looping (`FLAG_INSISTENT`) notification whose sound uses alarm audio attributes. The system
-   plays that sound, so it keeps ringing even if HyperOS freezes the app.
-3. When you answer, decline or miss the call, the notification is cancelled. Tapping
-   **Silence** also stops it.
-4. While a VIP rings, the alarm volume is raised to the level you choose (only ever raised) and
+2. In silent or vibrate mode it rings straight away. If only Do Not Disturb is on, it first
+   waits about a second to see if the phone rings anyway (for example because Do Not Disturb
+   allows starred contacts).
+3. It rings the way alarm clock apps do: a foreground service plays the ringtone with its own
+   player on the alarm stream. (Posting a notification whose sound uses alarm audio attributes
+   doesn't work: HyperOS silent mode mutes notification sounds regardless.)
+4. When you answer, decline or miss the call, the ringing stops. Tapping **Silence** also stops
+   it.
+5. While a VIP rings, the alarm volume is raised to the level you choose (only ever raised) and
    then put back. If Do Not Disturb blocks alarms and you've granted Do Not Disturb access, it's
    switched to *alarms only* for the length of the ring and then restored.
 
-For other apps, a notification listener spots incoming-call notifications (`CATEGORY_CALL` with a
-CallStyle or full-screen intent) and messages from VIPs. It only steps in if Do Not Disturb or
-silent mode actually held the notification back.
+For other apps, a notification listener spots incoming-call notifications (`CATEGORY_CALL`) and
+messages from VIPs. Calls ring through whenever silent mode or any Do Not Disturb mode is on,
+because Do Not Disturb can mute a calling app's own ringtone even when it lets the notification
+through. Messages only alert if Do Not Disturb or silent mode held them back.
 
 The **Recent activity** card shows what the app saw and did, which helps when something doesn't
 ring.

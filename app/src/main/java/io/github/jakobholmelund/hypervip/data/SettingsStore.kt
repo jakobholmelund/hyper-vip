@@ -2,6 +2,7 @@ package io.github.jakobholmelund.hypervip.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.Uri
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,8 @@ data class AppSettings(
     val messageAlerts: Boolean = false,
     /** The user says HyperOS autostart is on; Android has no API to check it. */
     val autostartConfirmed: Boolean = false,
+    /** Sound for VIP calls; null means the phone's ringtone. */
+    val ringtoneUri: Uri? = null,
 )
 
 object SettingsStore {
@@ -37,6 +40,7 @@ object SettingsStore {
             putBoolean("app_call_alerts", next.appCallAlerts)
             putBoolean("message_alerts", next.messageAlerts)
             putBoolean("autostart_confirmed", next.autostartConfirmed)
+            putString("ringtone_uri", next.ringtoneUri?.toString())
         }
         flow.value = next
     }
@@ -53,6 +57,7 @@ object SettingsStore {
             appCallAlerts = prefs.getBoolean("app_call_alerts", defaults.appCallAlerts),
             messageAlerts = prefs.getBoolean("message_alerts", defaults.messageAlerts),
             autostartConfirmed = prefs.getBoolean("autostart_confirmed", defaults.autostartConfirmed),
+            ringtoneUri = prefs.getString("ringtone_uri", null)?.let(Uri::parse),
         )
     }
 

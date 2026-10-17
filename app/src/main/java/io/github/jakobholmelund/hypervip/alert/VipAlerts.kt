@@ -12,10 +12,10 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.Settings
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import io.github.jakobholmelund.hypervip.R
 import io.github.jakobholmelund.hypervip.call.CallTracker
@@ -24,26 +24,28 @@ import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.match.VipMatcher
 
 /**
- * Rings for VIPs by posting a notification whose sound plays on the alarm stream. Silent and
- * vibrate mode don't mute alarms, and Do Not Disturb treats alarm-usage notifications as alarms,
- * which it allows by default. The system plays the sound (looping, via FLAG_INSISTENT), so it
- * keeps ringing even if HyperOS freezes this app; cancelling the notification stops it.
+ * Decides when a VIP should ring through, and starts and stops the ringing.
+ *
+ * Ringing is our own playback on the alarm stream ([Ringer]) inside a foreground service
+ * ([RingService]), like an alarm clock. Silent and vibrate mode don't mute alarms, and Do Not
+ * Disturb allows them by default. (Posting a notification with alarm audio attributes doesn't
+ * work: HyperOS silent mode mutes notification sounds regardless.)
  */
 object VipAlerts {
     const val ACTION_STOP = "io.github.jakobholmelund.hypervip.action.STOP_ALERT"
-    const val CHANNEL_CALLS = "vip_calls"
-    const val CHANNEL_MESSAGES = "vip_messages"
+    const val NOTIFICATION_RINGING = 1
 
-    private const val NOTIFICATION_CALL = 1
-    private const val NOTIFICATION_MESSAGE = 2
+    private const val CHANNEL_RINGING = "vip_ringing"
+    /** Channels from the version that rang through notification sounds. */
+    private val OLD_CHANNELS = listOf("vip_calls", "vip_messages")
 
     private const val HOLDER_CALL = "call"
     private const val HOLDER_MESSAGE = "message"
 
     /** Unanswered calls normally go to voicemail well before this. */
     private const val CALL_TIMEOUT_MS = 90_000L
-    private const val MESSAGE_SOUND_MS = 8_000L
     private const val TEST_RING_MS = 8_000L
+    private const val MESSAGE_HOLD_MS = 10_000L
 
     /** How long to give the phone to start ringing by itself before we ring instead. */
     private const val RING_CHECK_DELAY_MS = 1_200L
@@ -55,29 +57,18 @@ object VipAlerts {
 
     enum class Source { PHONE, APP, TEST }
 
-    private val alarmSound: AudioAttributes = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_ALARM)
-        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-        .build()
-
     fun createChannels(context: Context) {
-        val calls = NotificationChannel(CHANNEL_CALLS, "VIP calls", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Rings when a VIP calls while your phone is silenced"
-            setSound(Settings.System.DEFAULT_RINGTONE_URI, alarmSound)
-            enableVibration(true)
-            vibrationPattern = longArrayOf(0, 1000, 1000)
+        val nm = context.getSystemService(NotificationManager::class.java)
+        OLD_CHANNELS.forEach { nm.deleteNotificationChannel(it) }
+        val ringing = NotificationChannel(CHANNEL_RINGING, "VIP ringing", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Shown while a VIP rings through silent mode or Do Not Disturb, with a button to silence it"
+            // The sound comes from Hyper VIP's own player, not the notification.
+            setSound(null, null)
+            enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(false)
         }
-        val messages = NotificationChannel(CHANNEL_MESSAGES, "VIP messages", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "Plays a sound when a VIP messages you while your phone is silenced"
-            setSound(Settings.System.DEFAULT_NOTIFICATION_URI, alarmSound)
-            enableVibration(true)
-            vibrationPattern = longArrayOf(0, 300, 200, 300)
-            setShowBadge(false)
-        }
-        context.getSystemService(NotificationManager::class.java)
-            .createNotificationChannels(listOf(calls, messages))
+        nm.createNotificationChannel(ringing)
     }
 
     /** Called on a background thread for every incoming cellular call whose number is known. */
@@ -120,42 +111,43 @@ object VipAlerts {
     fun startAlert(context: Context, name: String, source: Source, appKey: String? = null) {
         // The call may have been answered while we were deciding.
         if (source == Source.PHONE && CallTracker.state(context) != TelephonyManager.EXTRA_STATE_RINGING) return
-        if (!canNotify(context)) {
-            EventLog.log(context, "Couldn't ring for $name — notifications are turned off for Hyper VIP")
-            return
-        }
-        AudioState.acquire(context, HOLDER_CALL, SettingsStore.get(context).alertVolumePercent, CALL_TIMEOUT_MS + 30_000)
+        val app = context.applicationContext
+        val settings = SettingsStore.get(app)
+        AudioState.acquire(app, HOLDER_CALL, settings.alertVolumePercent, CALL_TIMEOUT_MS + 30_000)
 
-        val stop = stopIntent(context)
         val title = if (source == Source.TEST) "Hyper VIP test ring" else "$name is calling"
         val text = when (source) {
             Source.PHONE -> "VIP — ringing through silent mode and Do Not Disturb"
             Source.APP -> "VIP call in another app — ringing through silent mode and Do Not Disturb"
             Source.TEST -> "This is what a VIP call sounds like. Tap to stop."
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_CALLS)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(true)
-            .setTimeoutAfter(CALL_TIMEOUT_MS)
-            .setContentIntent(stop)
-            .setDeleteIntent(stop)
-            .addAction(0, "Silence", stop)
-            .build()
-        notification.flags = notification.flags or Notification.FLAG_INSISTENT
-        notify(context, NOTIFICATION_CALL, notification)
+        val timeout = if (source == Source.TEST) TEST_RING_MS else CALL_TIMEOUT_MS
+        val intent = Intent(app, RingService::class.java)
+            .putExtra(RingService.EXTRA_TITLE, title)
+            .putExtra(RingService.EXTRA_TEXT, text)
+            .putExtra(RingService.EXTRA_TIMEOUT_MS, timeout)
+        val started = System.currentTimeMillis()
+        try {
+            ContextCompat.startForegroundService(app, intent)
+        } catch (e: Exception) {
+            // Android refuses foreground services started from the background unless battery
+            // optimisation is off. Ring from this process anyway; it may be cut short.
+            EventLog.log(app, "Couldn't ring in the foreground (${e.javaClass.simpleName}) — set Battery to No restrictions")
+            val main = Handler(Looper.getMainLooper())
+            main.post { Ringer.startRinging(app, settings.ringtoneUri) }
+            main.postDelayed({
+                if (prefs(app).getLong(KEY_STARTED, 0) == started) stopAlert(app, "no answer")
+            }, timeout)
+            if (canNotify(app)) notify(app, NOTIFICATION_RINGING, ringingNotification(app, title, text))
+        }
 
-        prefs(context).edit(commit = true) {
+        prefs(app).edit(commit = true) {
             putString(KEY_SOURCE, source.name)
             putString(KEY_APP_KEY, appKey)
-            putLong(KEY_STARTED, System.currentTimeMillis())
+            putLong(KEY_STARTED, started)
         }
         EventLog.log(
-            context,
+            app,
             when (source) {
                 Source.PHONE -> "$name is calling — ringing through"
                 Source.APP -> "$name is calling in another app — ringing through"
@@ -170,18 +162,23 @@ object VipAlerts {
      */
     @Synchronized
     fun stopAlert(context: Context, reason: String, onlySource: Source? = null, onlyAppKey: String? = null) {
-        val prefs = prefs(context)
+        val app = context.applicationContext
+        val prefs = prefs(app)
         val source = prefs.getString(KEY_SOURCE, null)
         if (onlySource != null && source != onlySource.name) return
         if (onlyAppKey != null && prefs.getString(KEY_APP_KEY, null) != onlyAppKey) return
-        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_CALL)
-        AudioState.release(context, HOLDER_CALL)
+        app.stopService(Intent(app, RingService::class.java))
+        Ringer.stop(app)
+        app.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_RINGING)
+        AudioState.release(app, HOLDER_CALL)
         prefs.edit(commit = true) {
             remove(KEY_SOURCE)
             remove(KEY_APP_KEY)
             remove(KEY_STARTED)
         }
-        if (source != null) EventLog.log(context, "Stopped ringing — $reason")
+        if (source != null) {
+            EventLog.log(app, if (source == Source.TEST.name) "Test ring finished" else "Stopped ringing — $reason")
+        }
     }
 
     fun isActive(context: Context): Boolean {
@@ -192,33 +189,30 @@ object VipAlerts {
     }
 
     fun messageAlert(context: Context, name: String, isTest: Boolean = false) {
-        if (!canNotify(context)) {
-            EventLog.log(context, "Couldn't alert for $name's message — notifications are turned off for Hyper VIP")
-            return
-        }
         val app = context.applicationContext
-        AudioState.acquire(app, HOLDER_MESSAGE, SettingsStore.get(app).alertVolumePercent, MESSAGE_SOUND_MS * 2)
-        val notification = NotificationCompat.Builder(app, CHANNEL_MESSAGES)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(if (isTest) "Hyper VIP test message" else "Message from $name")
-            .setContentText("VIP — alerted through silent mode and Do Not Disturb")
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setTimeoutAfter(60_000)
-            .build()
-        notify(app, NOTIFICATION_MESSAGE, notification)
+        AudioState.acquire(app, HOLDER_MESSAGE, SettingsStore.get(app).alertVolumePercent, MESSAGE_HOLD_MS)
+        Handler(Looper.getMainLooper()).post {
+            Ringer.playOnce(app) { AudioState.release(app, HOLDER_MESSAGE) }
+        }
         EventLog.log(app, if (isTest) "Test message alert played" else "Message from $name — alerted")
-        Handler(Looper.getMainLooper()).postDelayed({ AudioState.release(app, HOLDER_MESSAGE) }, MESSAGE_SOUND_MS)
     }
 
-    fun testRing(context: Context) {
-        val app = context.applicationContext
-        startAlert(app, "Test", Source.TEST)
-        Handler(Looper.getMainLooper()).postDelayed(
-            { stopAlert(app, "test finished", onlySource = Source.TEST) },
-            TEST_RING_MS,
-        )
+    fun testRing(context: Context) = startAlert(context, "Test", Source.TEST)
+
+    fun ringingNotification(context: Context, title: String, text: String): Notification {
+        val stop = stopIntent(context)
+        return NotificationCompat.Builder(context, CHANNEL_RINGING)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setContentIntent(stop)
+            .addAction(0, "Silence", stop)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .build()
     }
 
     fun canNotify(context: Context): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled()
@@ -235,7 +229,7 @@ object VipAlerts {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    @SuppressLint("MissingPermission") // Every caller checks canNotify() first.
+    @SuppressLint("MissingPermission") // Callers check canNotify() first.
     private fun notify(context: Context, id: Int, notification: Notification) {
         NotificationManagerCompat.from(context).notify(id, notification)
     }

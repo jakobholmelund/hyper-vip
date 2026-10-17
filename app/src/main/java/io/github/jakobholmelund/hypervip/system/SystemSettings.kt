@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import io.github.jakobholmelund.hypervip.R
-import io.github.jakobholmelund.hypervip.alert.VipAlerts
 import io.github.jakobholmelund.hypervip.notify.VipNotificationListener
 import java.util.Locale
 
@@ -51,15 +50,6 @@ object SystemSettings {
         context,
         Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context)),
-    )
-
-    fun openCallAlertSettings(context: Context) = start(
-        context,
-        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            .putExtra(Settings.EXTRA_CHANNEL_ID, VipAlerts.CHANNEL_CALLS),
-        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
     )
 
     private fun hyperOsBatteryIntent(context: Context) = Intent()
