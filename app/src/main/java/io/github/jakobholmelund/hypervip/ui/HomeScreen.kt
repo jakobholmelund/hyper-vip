@@ -91,6 +91,7 @@ fun HomeScreen(onAddVips: () -> Unit) {
     // Permissions and system settings change outside the app, so re-check every time we're resumed.
     var resumes by remember { mutableIntStateOf(0) }
     LifecycleResumeEffect(Unit) {
+        VipNotificationListener.ensureBound(context)
         resumes++
         onPauseOrDispose { }
     }

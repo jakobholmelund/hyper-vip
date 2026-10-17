@@ -49,4 +49,14 @@ class MatchingTest {
         assertFalse(Names.matches("Anna", "Anna Jensen"))
         assertFalse(Names.matches("", ""))
     }
+
+    @Test
+    fun mentionsFindsWholeWordNames() {
+        assertTrue(Names.mentions("Incoming voice call from Mom", "mom"))
+        assertTrue(Names.mentions("Anna Jensen", "anna jensen"))
+        assertTrue(Names.mentions("‪Anna Jensen‬ is calling…", "Anna Jensen"))
+        assertFalse(Names.mentions("Momentum", "Mom"))
+        assertFalse(Names.mentions("Incoming call", ""))
+        assertFalse(Names.mentions(null, "Mom"))
+    }
 }

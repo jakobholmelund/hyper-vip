@@ -57,6 +57,26 @@ object VipMatcher {
         return null
     }
 
+    /**
+     * Last resort for call notifications that don't say who is calling in a structured way: a VIP
+     * whose name appears in the notification's text. Longer names are tried first, so "Anna
+     * Jensen" beats "Anna".
+     */
+    fun byNameMention(context: Context, notification: Notification): VipContact? {
+        val extras = notification.extras
+        val texts = listOf(
+            Notification.EXTRA_TITLE,
+            Notification.EXTRA_TEXT,
+            Notification.EXTRA_SUB_TEXT,
+            Notification.EXTRA_BIG_TEXT,
+            Notification.EXTRA_CONVERSATION_TITLE,
+        ).mapNotNull { extras.getCharSequence(it) }
+        if (texts.isEmpty()) return null
+        return VipStore.get(context)
+            .sortedByDescending { it.name.length }
+            .firstOrNull { vip -> texts.any { Names.mentions(it, vip.name) } }
+    }
+
     /** Handles tel: URIs and contacts-provider URIs such as content://com.android.contacts/contacts/lookup/KEY/ID. */
     private fun byContactUri(context: Context, vips: List<VipContact>, raw: String): VipContact? {
         val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return null

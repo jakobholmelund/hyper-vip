@@ -2,6 +2,8 @@ package io.github.jakobholmelund.hypervip.notify
 
 import android.app.Notification
 import android.app.NotificationManager
+import android.content.ComponentName
+import android.content.Context
 import android.media.AudioManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.NotificationListenerService.Ranking
@@ -21,6 +23,7 @@ import io.github.jakobholmelund.hypervip.match.VipMatcher
  */
 class VipNotificationListener : NotificationListenerService() {
     private val lastMessageAlert = HashMap<String, Long>()
+    private val loggedOngoing = HashSet<String>()
 
     override fun onListenerConnected() {
         connected = true
@@ -38,14 +41,25 @@ class VipNotificationListener : NotificationListenerService() {
         val notification = sbn.notification ?: return
         if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
         try {
-            if (notification.category == Notification.CATEGORY_CALL) onCallNotification(sbn, settings)
+            if (isCallNotification(sbn)) onCallNotification(sbn, settings)
             else onOtherNotification(sbn, settings)
         } catch (e: Exception) {
             Log.w("HyperVip", "Failed to handle notification from ${sbn.packageName}", e)
+            EventLog.log(this, "Error reading a ${appName(sbn.packageName)} notification: ${e.javaClass.simpleName}: ${e.message}")
         }
     }
 
+    private fun isCallNotification(sbn: StatusBarNotification): Boolean {
+        val notification = sbn.notification
+        if (notification.category == Notification.CATEGORY_CALL) return true
+        if (notification.extras.containsKey(EXTRA_CALL_TYPE)) return true
+        // Not every calling app labels its ringing notification; a full-screen one from a calling
+        // app is its incoming-call screen.
+        return sbn.packageName in APP_NAMES && notification.fullScreenIntent != null
+    }
+
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        loggedOngoing.remove(sbn.key)
         VipAlerts.stopAlert(this, "call ended", onlySource = VipAlerts.Source.APP, onlyAppKey = sbn.key)
     }
 
@@ -53,17 +67,22 @@ class VipNotificationListener : NotificationListenerService() {
         // Cellular calls are handled from the call-state broadcast, which has the real number.
         if (!settings.appCallAlerts || isPhoneApp(sbn.packageName)) return
         val notification = sbn.notification
+        val app = appName(sbn.packageName)
+        val extras = notification.extras
+        val shown = listOfNotNull(
+            extras.getCharSequence(Notification.EXTRA_TITLE),
+            extras.getCharSequence(Notification.EXTRA_TEXT),
+        ).joinToString(" / ") { "“$it”" }
         if (!isIncomingCall(notification)) {
             // The incoming-call notification turning into an ongoing-call one means it was answered.
             VipAlerts.stopAlert(this, "call answered", onlySource = VipAlerts.Source.APP, onlyAppKey = sbn.key)
+            if (loggedOngoing.add(sbn.key)) EventLog.log(this, "$app call notification $shown looks like an ongoing call")
             return
         }
         if (VipAlerts.isActive(this)) return
-        val app = appName(sbn.packageName)
-        val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE)
-        val vip = VipMatcher.byNotification(this, notification)
+        val vip = VipMatcher.byNotification(this, notification) ?: VipMatcher.byNameMention(this, notification)
         if (vip == null) {
-            EventLog.log(this, "$app call from “$title” — not a VIP")
+            EventLog.log(this, "$app call $shown — no VIP found in it")
             return
         }
         if (!isSilenced()) {
@@ -133,6 +152,14 @@ class VipNotificationListener : NotificationListenerService() {
         @Volatile
         var connected = false
             private set
+
+        /** HyperOS sometimes drops the listener's binding; ask for it back if access is granted. */
+        fun ensureBound(context: Context) {
+            if (connected) return
+            val component = ComponentName(context, VipNotificationListener::class.java)
+            val nm = context.getSystemService(NotificationManager::class.java)
+            if (nm.isNotificationListenerAccessGranted(component)) runCatching { NotificationListenerService.requestRebind(component) }
+        }
 
         private const val MESSAGE_COOLDOWN_MS = 20_000L
 

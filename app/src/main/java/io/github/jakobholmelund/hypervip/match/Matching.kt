@@ -60,4 +60,20 @@ object Names {
         val x = normalize(a)
         return x.isNotEmpty() && x == normalize(b)
     }
+
+    /** True when [text] contains [name] as whole words, e.g. "Incoming call from Mom" mentions "mom". */
+    fun mentions(text: CharSequence?, name: CharSequence?): Boolean {
+        val haystack = normalize(text)
+        val needle = normalize(name)
+        if (needle.isEmpty()) return false
+        var from = 0
+        while (true) {
+            val i = haystack.indexOf(needle, from)
+            if (i < 0) return false
+            val before = haystack.getOrNull(i - 1)
+            val after = haystack.getOrNull(i + needle.length)
+            if ((before == null || !before.isLetterOrDigit()) && (after == null || !after.isLetterOrDigit())) return true
+            from = i + 1
+        }
+    }
 }
