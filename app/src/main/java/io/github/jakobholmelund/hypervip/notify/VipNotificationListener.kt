@@ -36,7 +36,10 @@ class VipNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName == packageName) return
+        if (sbn.packageName == packageName) {
+            if (sbn.id == VipAlerts.NOTIFICATION_RINGING && sbn.isOngoing) OngoingVisibility.onOwnOngoingSeen(this)
+            return
+        }
         val settings = SettingsStore.get(this)
         if (!settings.enabled || (!settings.appCallAlerts && !settings.messageAlerts)) return
         val notification = sbn.notification ?: return
@@ -67,9 +70,13 @@ class VipNotificationListener : NotificationListenerService() {
 
     private fun onCallNotification(sbn: StatusBarNotification, settings: AppSettings) {
         // Cellular calls are handled from the call-state broadcast, which has the real number.
-        if (!settings.appCallAlerts || isPhoneApp(sbn.packageName)) return
+        if (isPhoneApp(sbn.packageName)) return
         val notification = sbn.notification
         val app = appName(sbn.packageName)
+        if (!settings.appCallAlerts) {
+            if (loggedOngoing.add(sbn.key)) EventLog.log(this, "$app call ignored — “Calls in other apps” is off")
+            return
+        }
         val extras = notification.extras
         val shown = listOfNotNull(
             extras.getCharSequence(Notification.EXTRA_TITLE),
@@ -81,7 +88,10 @@ class VipNotificationListener : NotificationListenerService() {
             if (loggedOngoing.add(sbn.key)) EventLog.log(this, "$app call notification $shown looks like an ongoing call")
             return
         }
-        if (VipAlerts.isActive(this)) return
+        if (VipAlerts.isActive(this)) {
+            if (loggedOngoing.add(sbn.key)) EventLog.log(this, "$app call $shown — already ringing for another call")
+            return
+        }
         val vip = VipMatcher.byNotification(this, notification) ?: VipMatcher.byNameMention(this, notification)
         if (vip == null) {
             EventLog.log(this, "$app call $shown — no VIP found in it")

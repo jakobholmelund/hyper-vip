@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import io.github.jakobholmelund.hypervip.alert.VipAlerts
 import io.github.jakobholmelund.hypervip.data.AppSettings
 import io.github.jakobholmelund.hypervip.data.SettingsStore
+import io.github.jakobholmelund.hypervip.notify.OngoingVisibility
 import io.github.jakobholmelund.hypervip.notify.VipNotificationListener
 
 enum class Need { REQUIRED, RECOMMENDED, OPTIONAL }
@@ -96,6 +97,20 @@ object SetupChecks {
             done = nm.isNotificationListenerAccessGranted(ComponentName(context, VipNotificationListener::class.java)),
             action = SystemSettings::openNotificationAccess,
         )
+        if (OngoingVisibility.result(context) == false) {
+            items += SetupItem(
+                key = "listener_types",
+                title = "Let Hyper VIP see incoming app calls",
+                description = "The last test ring showed Hyper VIP can't see ongoing notifications, which is " +
+                    "what WhatsApp's incoming calls are. Turn Hyper VIP's notification access off and on " +
+                    "again, and if its page lists notification types, allow them all (including " +
+                    "“Real-time” or “Ongoing”). Then tap Test ring to check.",
+                need = Need.RECOMMENDED,
+                done = false,
+                actionLabel = "Open",
+                action = SystemSettings::openNotificationAccess,
+            )
+        }
         items += SetupItem(
             key = "dnd",
             title = "Do Not Disturb access",

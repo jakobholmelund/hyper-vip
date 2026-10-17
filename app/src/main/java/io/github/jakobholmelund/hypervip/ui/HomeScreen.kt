@@ -71,6 +71,7 @@ import io.github.jakobholmelund.hypervip.data.LogEntry
 import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.data.VipContact
 import io.github.jakobholmelund.hypervip.data.VipStore
+import io.github.jakobholmelund.hypervip.notify.OngoingVisibility
 import io.github.jakobholmelund.hypervip.notify.VipNotificationListener
 import io.github.jakobholmelund.hypervip.system.Need
 import io.github.jakobholmelund.hypervip.system.SetupChecks
@@ -95,7 +96,8 @@ fun HomeScreen(onAddVips: () -> Unit) {
         resumes++
         onPauseOrDispose { }
     }
-    val setup = remember(resumes, settings) { SetupChecks.evaluate(context, settings) }
+    // The log changes whenever an alert or test ring ends, which can change setup results too.
+    val setup = remember(resumes, settings, log) { SetupChecks.evaluate(context, settings) }
     val sound = remember(resumes, log) { readSoundState(context) }
 
     LaunchedEffect(resumes) {
@@ -386,6 +388,7 @@ private data class SoundState(
     val alarmVolume: Int,
     val alarmMax: Int,
     val listenerRunning: Boolean,
+    val seesAppCalls: Boolean?,
 )
 
 private fun readSoundState(context: Context): SoundState {
@@ -409,6 +412,7 @@ private fun readSoundState(context: Context): SoundState {
         alarmVolume = am.getStreamVolume(AudioManager.STREAM_ALARM),
         alarmMax = am.getStreamMaxVolume(AudioManager.STREAM_ALARM),
         listenerRunning = VipNotificationListener.connected,
+        seesAppCalls = OngoingVisibility.result(context),
     )
 }
 
@@ -427,6 +431,14 @@ private fun SoundStateCard(sound: SoundState) {
         )
         InfoRow("Alarm volume", "${sound.alarmVolume} of ${sound.alarmMax}")
         InfoRow("Notification access", if (sound.listenerRunning) "Running" else "Not running")
+        InfoRow(
+            "Sees WhatsApp-style calls",
+            when (sound.seesAppCalls) {
+                true -> "Yes"
+                false -> "No — see Setup"
+                null -> "Tap Test ring to check"
+            },
+        )
     }
 }
 
