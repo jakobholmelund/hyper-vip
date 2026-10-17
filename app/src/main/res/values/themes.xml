@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.HyperVip" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
