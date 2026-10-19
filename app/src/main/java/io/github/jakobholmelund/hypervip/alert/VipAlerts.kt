@@ -22,7 +22,7 @@ import io.github.jakobholmelund.hypervip.call.CallTracker
 import io.github.jakobholmelund.hypervip.data.EventLog
 import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.match.VipMatcher
-import io.github.jakobholmelund.hypervip.notify.OngoingVisibility
+import io.github.jakobholmelund.hypervip.notify.CallWatcherService
 
 /**
  * Decides when a VIP should ring through, and starts and stops the ringing.
@@ -154,6 +154,7 @@ object VipAlerts {
             putString(KEY_APP_KEY, appKey)
             putLong(KEY_STARTED, started)
         }
+        CallWatcherService.onRingingChanged(true)
         EventLog.log(
             app,
             when (source) {
@@ -175,7 +176,6 @@ object VipAlerts {
         val source = prefs.getString(KEY_SOURCE, null)
         if (onlySource != null && source != onlySource.name) return
         if (onlyAppKey != null && prefs.getString(KEY_APP_KEY, null) != onlyAppKey) return
-        if (source == Source.TEST.name) OngoingVisibility.onTestRingFinished(app, prefs.getLong(KEY_STARTED, 0))
         app.stopService(Intent(app, RingService::class.java))
         Ringer.stop()
         app.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_RINGING)
@@ -185,6 +185,7 @@ object VipAlerts {
             remove(KEY_APP_KEY)
             remove(KEY_STARTED)
         }
+        CallWatcherService.onRingingChanged(false)
         if (source != null) {
             EventLog.log(app, if (source == Source.TEST.name) "Test ring finished" else "Stopped ringing — $reason")
         }

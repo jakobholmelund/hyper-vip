@@ -12,7 +12,6 @@ import io.github.jakobholmelund.hypervip.alert.VipAlerts
 import io.github.jakobholmelund.hypervip.data.AppSettings
 import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.notify.CallWatcherService
-import io.github.jakobholmelund.hypervip.notify.OngoingVisibility
 import io.github.jakobholmelund.hypervip.notify.VipNotificationListener
 
 enum class Need { REQUIRED, RECOMMENDED, OPTIONAL }
@@ -67,8 +66,10 @@ object SetupChecks {
         items += SetupItem(
             key = "battery",
             title = "Battery: no restrictions",
-            description = "Stops HyperOS from putting Hyper VIP to sleep, which would make it miss calls. " +
-                "If the first button does nothing, use “HyperOS battery saver” and pick “No restrictions”.",
+            description = "Lets Hyper VIP start ringing when a VIP calls; otherwise HyperOS may block it. " +
+                "It doesn't cost battery: Hyper VIP runs nothing in the background and only wakes up when a " +
+                "call or notification arrives. If the first button does nothing, use “HyperOS battery " +
+                "saver” and pick “No restrictions”.",
             need = Need.REQUIRED,
             done = power.isIgnoringBatteryOptimizations(context.packageName),
             action = SystemSettings::requestBatteryExemption,
@@ -92,8 +93,8 @@ object SetupChecks {
         items += SetupItem(
             key = "listener",
             title = "Notification access",
-            description = "Lets VIPs ring through on WhatsApp, Signal and Telegram calls and alerts you to " +
-                "their messages. It also keeps Hyper VIP running reliably on HyperOS.",
+            description = "Alerts you to VIPs' messages and stops a VIP ring when a call app reports a " +
+                "missed call. It also keeps Hyper VIP running reliably on HyperOS.",
             need = Need.RECOMMENDED,
             done = nm.isNotificationListenerAccessGranted(ComponentName(context, VipNotificationListener::class.java)),
             action = SystemSettings::openNotificationAccess,
@@ -110,20 +111,6 @@ object SetupChecks {
             actionLabel = "Open",
             action = SystemSettings::openAccessibility,
         )
-        if (OngoingVisibility.result(context) == false) {
-            items += SetupItem(
-                key = "listener_types",
-                title = "Let Hyper VIP see incoming app calls",
-                description = "The last test ring showed Hyper VIP can't see ongoing notifications, which is " +
-                    "what WhatsApp's incoming calls are. Turn Hyper VIP's notification access off and on " +
-                    "again, and if its page lists notification types, allow them all (including " +
-                    "“Real-time” or “Ongoing”). Then tap Test ring to check.",
-                need = Need.RECOMMENDED,
-                done = false,
-                actionLabel = "Open",
-                action = SystemSettings::openNotificationAccess,
-            )
-        }
         items += SetupItem(
             key = "dnd",
             title = "Do Not Disturb access",

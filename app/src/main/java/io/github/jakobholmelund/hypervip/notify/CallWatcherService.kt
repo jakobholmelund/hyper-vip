@@ -1,6 +1,7 @@
 package io.github.jakobholmelund.hypervip.notify
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.KeyguardManager
 import android.app.Notification
 import android.content.ComponentName
@@ -32,11 +33,21 @@ class CallWatcherService : AccessibilityService() {
 
     override fun onServiceConnected() {
         connected = true
+        instance = this
+        setKeyFiltering(VipAlerts.isActive(this))
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         connected = false
+        instance = null
         return super.onUnbind(intent)
+    }
+
+    private fun setKeyFiltering(on: Boolean) {
+        val info = serviceInfo ?: return
+        val flag = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        val flags = if (on) info.flags or flag else info.flags and flag.inv()
+        if (flags != info.flags) serviceInfo = info.apply { this.flags = flags }
     }
 
     override fun onInterrupt() = Unit
@@ -77,8 +88,9 @@ class CallWatcherService : AccessibilityService() {
         val eventText = event.text.toList()
         // Give the screen a moment to draw the caller's name before reading it.
         handler.postDelayed({
-            val texts = eventText + screenText(rootInActiveWindow)
-            AppCalls.onCallScreen(this, pkg, texts)
+            // Only ever read the calling app's own window; by now something else may be in front.
+            val root = rootInActiveWindow?.takeIf { it.packageName?.toString() == pkg }
+            AppCalls.onCallScreen(this, pkg, eventText + screenText(root))
         }, SCREEN_READ_DELAY_MS)
     }
 
@@ -110,6 +122,16 @@ class CallWatcherService : AccessibilityService() {
         @Volatile
         var connected = false
             private set
+
+        private var instance: CallWatcherService? = null
+
+        /**
+         * Intercept volume buttons (to silence the ring) only while a VIP rings; the rest of the
+         * time key presses don't pass through Hyper VIP at all.
+         */
+        fun onRingingChanged(ringing: Boolean) {
+            Handler(Looper.getMainLooper()).post { instance?.setKeyFiltering(ringing) }
+        }
 
         fun isEnabled(context: Context): Boolean {
             val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)

@@ -59,6 +59,20 @@ messages from VIPs. Calls ring through whenever silent mode or any Do Not Distur
 because Do Not Disturb can mute a calling app's own ringtone even when it lets the notification
 through. Messages only alert if Do Not Disturb or silent mode held them back.
 
+### Battery use
+
+Hyper VIP has no background service, timer or wakelock. It only runs when Android hands it an
+event: a call-state broadcast, a notification, or an accessibility event from a calling app (the
+accessibility service is limited to those apps, and only intercepts volume buttons while a VIP is
+ringing). The foreground service exists only while a VIP rings. HyperOS's "No restrictions"
+battery setting is needed so that service may start from the background; it doesn't make the
+app use more power.
+
+### Privacy
+
+Nothing leaves the phone: the app has no internet permission, and backups and device transfers
+exclude its data. The activity log keeps caller names and app names only, never message text.
+
 The **Recent activity** card shows what the app saw and did, which helps when something doesn't
 ring.
 

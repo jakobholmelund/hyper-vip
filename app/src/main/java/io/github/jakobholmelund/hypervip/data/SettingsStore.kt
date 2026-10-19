@@ -12,7 +12,7 @@ data class AppSettings(
     val enabled: Boolean = true,
     /** Alarm volume while a VIP alert sounds, in percent of max. Never lowers the current volume. */
     val alertVolumePercent: Int = 80,
-    /** Ring for VIP calls in WhatsApp, Signal, Telegram etc. Needs notification access. */
+    /** Ring for VIP calls in WhatsApp, Signal, Telegram etc. Needs the accessibility call watcher. */
     val appCallAlerts: Boolean = true,
     /** Play a sound for messages from VIPs. Needs notification access. */
     val messageAlerts: Boolean = false,

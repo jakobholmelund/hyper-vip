@@ -23,7 +23,6 @@ import io.github.jakobholmelund.hypervip.match.VipMatcher
  */
 class VipNotificationListener : NotificationListenerService() {
     private val lastMessageAlert = HashMap<String, Long>()
-    private val loggedOther = HashSet<String>()
 
     override fun onListenerConnected() {
         connected = true
@@ -35,10 +34,7 @@ class VipNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName == packageName) {
-            if (sbn.id == VipAlerts.NOTIFICATION_RINGING && sbn.isOngoing) OngoingVisibility.onOwnOngoingSeen(this)
-            return
-        }
+        if (sbn.packageName == packageName) return
         val settings = SettingsStore.get(this)
         if (!settings.enabled) return
         val notification = sbn.notification ?: return
@@ -58,7 +54,6 @@ class VipNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        loggedOther.remove(sbn.key)
         val notification = sbn.notification ?: return
         if (AppCalls.isCallNotification(sbn.packageName, notification)) {
             VipAlerts.stopAlert(this, "call ended", onlySource = VipAlerts.Source.APP, onlyAppKey = sbn.packageName)
@@ -66,20 +61,8 @@ class VipNotificationListener : NotificationListenerService() {
     }
 
     private fun onOtherNotification(sbn: StatusBarNotification, settings: AppSettings) {
-        val notification = sbn.notification
-        if (sbn.packageName in AppCalls.APP_NAMES && notification.category != Notification.CATEGORY_MESSAGE &&
-            loggedOther.add(sbn.key)
-        ) {
-            // Calling apps that ring without a recognisable call notification show up here.
-            val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE)
-            val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT)
-            EventLog.log(
-                this,
-                "${AppCalls.appName(sbn.packageName)} notification “$title” / “$text” " +
-                    "(category ${notification.category ?: "none"}) — not treated as a call",
-            )
-        }
         if (!settings.messageAlerts) return
+        val notification = sbn.notification
         if ((notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
         val category = notification.category
         if (category != null && category != Notification.CATEGORY_MESSAGE) return
