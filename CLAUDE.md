@@ -10,6 +10,8 @@
   `HYPERVIP_KEYSTORE_PASSWORD` environment variables (set in the user's cloud environment). Never
   commit a keystore, print the key material, or sign with a new key — a different key means the
   user has to uninstall. If the variables are missing, ask the user to add them.
+- Releases: bump `versionName` in `app/build.gradle.kts` and add a CHANGELOG.md entry. The
+  version code is the commit count, so never squash or rewrite pushed history.
 - The pure-Kotlin matching code in `match/Matching.kt` and its tests also compile with a plain
   Kotlin/JVM project, without the Android SDK.
 - `targetSdk` stays at 34 on purpose (see README, "Why targetSdk is 34"). Lint's

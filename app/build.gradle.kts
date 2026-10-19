@@ -27,7 +27,8 @@ android {
         // target SDK requirement doesn't apply.
         targetSdk = 34
         versionCode = buildNumber
-        versionName = "0.1.$buildNumber"
+        // Bump for each release; the version code (commit count) keeps updates installable.
+        versionName = "1.0.0"
     }
 
     signingConfigs {

@@ -16,17 +16,32 @@ Hyper VIP isn't on any app store (see "Why not the Play Store" below).
 
 Newer APKs install over older ones and keep your VIPs.
 
+**Play Protect may warn** that the app is from an unknown developer, or that it uses
+accessibility and call logs. That's expected for a sideloaded app that does this job; see
+"Privacy" below for what it does with them.
+
+### Check the download
+
+Every genuine Hyper VIP APK is signed with this certificate (SHA-256):
+
+```
+0E:CF:80:79:3F:65:B6:A7:8B:4A:C9:06:FC:89:7E:81:D5:3A:F0:A5:9F:21:6A:B9:F6:3C:1B:EE:55:A0:83:69
+```
+
+Check it with `apksigner verify --print-certs hyper-vip.apk`, or on the phone with an app such as
+AppVerifier. Don't install an APK with a different fingerprint.
+
 ## Setup on HyperOS
 
 | Step | Why |
 | --- | --- |
 | Contacts | To pick VIPs and recognise them. |
 | Phone and call logs | Android only tells an app who is calling if it has call log access. |
-| Notifications | The VIP ring is a notification that plays on the alarm channel. |
+| Notifications | Shows who's calling while a VIP rings, with a **Silence** button. |
 | Battery: no restrictions | Otherwise HyperOS puts the app to sleep and it misses calls. If the standard prompt does nothing, use **HyperOS settings** and pick **No restrictions**. |
 | Autostart | HyperOS only delivers incoming-call events to apps with Autostart on. Android can't check this, so tap **It's on** once you've enabled it. |
 | Accessibility (recommended) | HyperOS doesn't pass WhatsApp's ringing notification to notification access. The *Hyper VIP call watcher* accessibility service sees it instead, only for calling apps. While a VIP rings, a volume button press silences it. |
-| Notification access (recommended) | Needed for WhatsApp, Signal and Telegram calls and for messages. It also keeps the app alive on HyperOS. |
+| Notification access (recommended) | Needed for VIP message alerts, and stops a VIP ring when a calling app reports a missed call. It also keeps the app alive on HyperOS. |
 | Do Not Disturb access (optional) | Only needed if your Do Not Disturb blocks alarms or uses *Total silence*. |
 
 If HyperOS greys out a switch as a **Restricted setting** (this happens for sideloaded apps),
@@ -76,6 +91,13 @@ exclude its data. The activity log keeps caller names and app names only, never 
 The **Recent activity** card shows what the app saw and did, which helps when something doesn't
 ring.
 
+### Known limitations
+
+- Declining a VIP's WhatsApp, Signal or Telegram call on the app's own screen doesn't stop
+  Hyper VIP's ring (Android doesn't tell other apps). Press a volume button or tap **Silence**.
+- Only tested on HyperOS. Dual-SIM phones should work but haven't been tested.
+- Hyper VIP is in English only.
+
 ### Why `targetSdk` is 34
 
 Apps targeting Android 15 (API 35) or later can no longer change the phone-wide Do Not Disturb
@@ -117,3 +139,12 @@ key, so losing it means uninstalling and setting the app up again.
 
 Early builds were signed with a key that was committed to this repository (now removed). That
 key is public, so don't trust any APK signed with it.
+
+## Reporting a problem
+
+Open an issue with your phone model, HyperOS version and a screenshot of the app's **Recent
+activity** card right after the call that didn't ring.
+
+## License
+
+[MIT](LICENSE)
