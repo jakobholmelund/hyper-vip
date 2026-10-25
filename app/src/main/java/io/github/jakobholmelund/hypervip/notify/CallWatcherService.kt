@@ -74,6 +74,7 @@ class CallWatcherService : AccessibilityService() {
                 pkg,
                 notification,
                 logKey = "$pkg:${notification.`when`}",
+                via = AppCalls.Route.ACCESSIBILITY,
                 extraText = event.text.toList(),
             )
         }

@@ -38,11 +38,18 @@ class VipNotificationListener : NotificationListenerService() {
         val settings = SettingsStore.get(this)
         if (!settings.enabled) return
         val notification = sbn.notification ?: return
-        if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
+        // Group summaries are skipped, except calls: an app may post its ringing notification as one.
+        val isCall = AppCalls.isCallNotification(sbn.packageName, notification)
+        if (!isCall && (notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
         try {
             when {
-                AppCalls.isCallNotification(sbn.packageName, notification) ->
-                    AppCalls.onCallNotification(this, sbn.packageName, notification, sbn.key)
+                isCall -> AppCalls.onCallNotification(
+                    this,
+                    sbn.packageName,
+                    notification,
+                    sbn.key,
+                    via = AppCalls.Route.NOTIFICATION_ACCESS,
+                )
                 notification.category == Notification.CATEGORY_MISSED_CALL ->
                     AppCalls.onMissedCall(this, sbn.packageName)
                 else -> onOtherNotification(sbn, settings)

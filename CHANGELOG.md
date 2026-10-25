@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+
+- Accessibility is now an optional backup. Some banking apps refuse to open while any
+  accessibility service is on, so Hyper VIP first tries to catch app calls through notification
+  access alone.
+- Notification access no longer skips a calling app's ringing notification when the app posts it
+  as a group summary.
+- Recent activity says which route spotted each app call, and notes when a calling app reports a
+  missed call whose ringing notification never reached Hyper VIP.
+
 ## 1.0.0
 
 First public release.

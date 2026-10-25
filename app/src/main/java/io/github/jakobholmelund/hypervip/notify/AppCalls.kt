@@ -19,6 +19,12 @@ import io.github.jakobholmelund.hypervip.match.VipMatcher
  * a missed-call notification or the call notification going away stops the right alert.
  */
 object AppCalls {
+    /** How a call was spotted; logged so it's clear whether accessibility is needed at all. */
+    enum class Route(val label: String) {
+        NOTIFICATION_ACCESS("notification access"),
+        ACCESSIBILITY("the accessibility call watcher"),
+    }
+
     val APP_NAMES = mapOf(
         "com.whatsapp" to "WhatsApp",
         "com.whatsapp.w4b" to "WhatsApp Business",
@@ -49,6 +55,10 @@ object AppCalls {
 
     /** Log lines already written, so a notification that's updated doesn't flood the log. */
     private val logged = LinkedHashSet<String>()
+
+    /** When each app's call notification was last seen, by any route. */
+    private val lastCallSeen = HashMap<String, Long>()
+    private const val MISSED_CALL_WINDOW_MS = 3 * 60_000L
 
     fun appName(pkg: String): String = APP_NAMES[pkg] ?: pkg
 
@@ -99,11 +109,13 @@ object AppCalls {
         pkg: String,
         notification: Notification,
         logKey: String,
+        via: Route,
         extraText: List<CharSequence> = emptyList(),
     ) {
         if (isPhoneApp(context, pkg)) return
         val settings = SettingsStore.get(context)
         if (!settings.enabled) return
+        synchronized(this) { lastCallSeen[pkg] = System.currentTimeMillis() }
         val app = appName(pkg)
         val extras = notification.extras
         val shown = listOfNotNull(
@@ -128,7 +140,7 @@ object AppCalls {
             logOnce(context, "novip:$logKey", "$app call $shown — no VIP found in it")
             return
         }
-        ringIfSilenced(context, pkg, vip.name)
+        ringIfSilenced(context, pkg, vip.name, via)
     }
 
     /** A calling app's full-screen call screen opened on a locked phone; [texts] is what it shows. */
@@ -146,15 +158,20 @@ object AppCalls {
             EventLog.log(context, "$app call screen opened — no VIP name on it")
             return
         }
-        ringIfSilenced(context, pkg, vip.name)
+        ringIfSilenced(context, pkg, vip.name, Route.ACCESSIBILITY)
     }
 
     fun onMissedCall(context: Context, pkg: String) {
         VipAlerts.stopAlert(context, "missed call", onlySource = VipAlerts.Source.APP, onlyAppKey = pkg)
+        val seen = synchronized(this) { lastCallSeen[pkg] }
+        if (pkg in APP_NAMES && (seen == null || System.currentTimeMillis() - seen > MISSED_CALL_WINDOW_MS)) {
+            EventLog.log(context, "${appName(pkg)} reported a missed call, but its ringing notification never reached Hyper VIP")
+        }
     }
 
-    private fun ringIfSilenced(context: Context, pkg: String, name: String) {
+    private fun ringIfSilenced(context: Context, pkg: String, name: String, via: Route) {
         val app = appName(pkg)
+        EventLog.log(context, "$app call from $name spotted by ${via.label}")
         if (!isSilenced(context)) {
             EventLog.log(context, "$name is calling on $app — the phone isn't silenced, so $app rings itself")
             return

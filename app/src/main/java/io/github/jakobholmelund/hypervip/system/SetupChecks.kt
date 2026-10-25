@@ -101,12 +101,13 @@ object SetupChecks {
         )
         items += SetupItem(
             key = "accessibility",
-            title = "Accessibility: catch WhatsApp calls",
-            description = "HyperOS hides WhatsApp's ringing notification from notification access, so " +
-                "Hyper VIP needs accessibility to spot VIP calls in WhatsApp, Signal and Telegram. It " +
-                "only watches those apps. Open Accessibility → Downloaded apps → Hyper VIP call watcher. " +
-                "If it's greyed out, use App info → ⋮ → Allow restricted settings first.",
-            need = Need.RECOMMENDED,
+            title = "Accessibility: backup for WhatsApp calls",
+            description = "Only turn this on if VIP calls in WhatsApp, Signal or Telegram don't ring " +
+                "without it. Some banking apps refuse to open while any accessibility service is on. " +
+                "Recent activity shows which route spotted each call. To turn it on: Accessibility → " +
+                "Downloaded apps → Hyper VIP call watcher (if greyed out, App info → ⋮ → Allow " +
+                "restricted settings first).",
+            need = Need.OPTIONAL,
             done = CallWatcherService.isEnabled(context),
             actionLabel = "Open",
             action = SystemSettings::openAccessibility,
