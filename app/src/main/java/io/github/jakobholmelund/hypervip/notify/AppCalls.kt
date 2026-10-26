@@ -22,6 +22,7 @@ object AppCalls {
     /** How a call was spotted; logged so it's clear whether accessibility is needed at all. */
     enum class Route(val label: String) {
         NOTIFICATION_ACCESS("notification access"),
+        NOTIFICATION_SCAN("notification access (list check)"),
         ACCESSIBILITY("the accessibility call watcher"),
     }
 

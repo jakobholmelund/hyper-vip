@@ -28,7 +28,7 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         // Bump for each release; the version code (commit count) keeps updates installable.
-        versionName = "1.0.2"
+        versionName = "1.0.3"
     }
 
     signingConfigs {

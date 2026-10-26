@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3
+
+- Experiment: besides being told about new notifications, notification access now also checks
+  the list of notifications currently showing whenever notifications change or the phone starts
+  ringing. If HyperOS lists WhatsApp's ringing notification there, calls are caught without
+  accessibility ("spotted by notification access (list check)").
+- Recent activity notes when an app call rings but no call notification is visible.
+
 ## 1.0.2
 
 - HyperOS doesn't give notification access the ringing notification for WhatsApp-style calls, so
