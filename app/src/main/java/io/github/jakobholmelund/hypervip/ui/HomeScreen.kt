@@ -388,7 +388,7 @@ private data class SoundState(
     val alarmVolume: Int,
     val alarmMax: Int,
     val listenerRunning: Boolean,
-    val callWatcherOn: Boolean,
+    val callWatcher: CallWatcherService.Companion.Mode,
 )
 
 private fun readSoundState(context: Context): SoundState {
@@ -412,7 +412,7 @@ private fun readSoundState(context: Context): SoundState {
         alarmVolume = am.getStreamVolume(AudioManager.STREAM_ALARM),
         alarmMax = am.getStreamMaxVolume(AudioManager.STREAM_ALARM),
         listenerRunning = VipNotificationListener.connected,
-        callWatcherOn = CallWatcherService.isEnabled(context),
+        callWatcher = CallWatcherService.mode(context),
     )
 }
 
@@ -431,7 +431,14 @@ private fun SoundStateCard(sound: SoundState) {
         )
         InfoRow("Alarm volume", "${sound.alarmVolume} of ${sound.alarmMax}")
         InfoRow("Notification access", if (sound.listenerRunning) "Running" else "Not running")
-        InfoRow("Accessibility call watcher", if (sound.callWatcherOn) "On" else "Off")
+        InfoRow(
+            "Accessibility call watcher",
+            when (sound.callWatcher) {
+                CallWatcherService.Companion.Mode.OFF -> "Off"
+                CallWatcherService.Companion.Mode.LIGHT -> "On (light)"
+                CallWatcherService.Companion.Mode.FULL -> "On (full)"
+            },
+        )
     }
 }
 

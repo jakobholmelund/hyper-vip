@@ -21,30 +21,31 @@ import java.util.Locale
  * Spots incoming calls in WhatsApp, Signal, Telegram etc. through accessibility events, because
  * HyperOS doesn't pass WhatsApp's ringing notification to notification listeners.
  *
- * - Unlocked phone: the call arrives as a heads-up notification, which accessibility services
- *   get as a notification event.
- * - Locked phone: the app opens a full-screen call screen; its text names the caller.
+ * Two variants, which the user picks between in Accessibility settings:
+ * - This one (res/xml/call_watcher.xml) only receives calling apps' notification events. It
+ *   can't read the screen or intercept keys, which many banking apps tolerate.
+ * - [CallWatcherFullService] (res/xml/call_watcher_full.xml) also reads the caller's name from
+ *   the full-screen call screen on a locked phone and lets a volume button silence a VIP ring.
  *
- * Its config (res/xml/call_watcher.xml) limits events to those calling apps. It also lets a
- * volume button press silence a VIP ring, like the phone does for normal calls.
+ * The same code serves both; the light variant simply never gets window or key events.
  */
-class CallWatcherService : AccessibilityService() {
+open class CallWatcherService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
-        connected = true
-        instance = this
+        instances += this
         setKeyFiltering(VipAlerts.isActive(this))
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        connected = false
-        instance = null
+        instances -= this
         return super.onUnbind(intent)
     }
 
     private fun setKeyFiltering(on: Boolean) {
         val info = serviceInfo ?: return
+        // Only the full variant declares it may filter keys; the light one never asks.
+        if ((info.capabilities and AccessibilityServiceInfo.CAPABILITY_CAN_REQUEST_FILTER_KEY_EVENTS) == 0) return
         val flag = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
         val flags = if (on) info.flags or flag else info.flags and flag.inv()
         if (flags != info.flags) serviceInfo = info.apply { this.flags = flags }
@@ -119,26 +120,29 @@ class CallWatcherService : AccessibilityService() {
         private const val SCREEN_READ_DELAY_MS = 600L
         private const val MAX_NODES = 300
 
-        /** Whether the system has the service bound; shown in the app for troubleshooting. */
-        @Volatile
-        var connected = false
-            private set
-
-        private var instance: CallWatcherService? = null
+        /** Bound watchers (light and/or full); touched on the main thread only. */
+        private val instances = mutableSetOf<CallWatcherService>()
 
         /**
          * Intercept volume buttons (to silence the ring) only while a VIP rings; the rest of the
          * time key presses don't pass through Hyper VIP at all.
          */
         fun onRingingChanged(ringing: Boolean) {
-            Handler(Looper.getMainLooper()).post { instance?.setKeyFiltering(ringing) }
+            Handler(Looper.getMainLooper()).post { instances.forEach { it.setKeyFiltering(ringing) } }
         }
 
-        fun isEnabled(context: Context): Boolean {
+        enum class Mode { OFF, LIGHT, FULL }
+
+        fun mode(context: Context): Mode {
             val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-                ?: return false
-            val me = ComponentName(context, CallWatcherService::class.java)
-            return enabled.split(':').any { ComponentName.unflattenFromString(it) == me }
+                ?.split(':')?.mapNotNull { ComponentName.unflattenFromString(it) }.orEmpty()
+            return when {
+                ComponentName(context, CallWatcherFullService::class.java) in enabled -> Mode.FULL
+                ComponentName(context, CallWatcherService::class.java) in enabled -> Mode.LIGHT
+                else -> Mode.OFF
+            }
         }
+
+        fun isEnabled(context: Context): Boolean = mode(context) != Mode.OFF
     }
 }

@@ -17,8 +17,10 @@
 - `targetSdk` stays at 34 on purpose (see README, "Why targetSdk is 34"). Lint's
   `ExpiredTargetSdkVersion` is disabled for that reason.
 - App calls (WhatsApp etc.) are handled in `notify/AppCalls.kt`, fed by both the notification
-  listener and the accessibility service `notify/CallWatcherService.kt`. Tested on HyperOS: the
-  listener gets WhatsApp messages and missed-call notifications but never the ringing one.
+  listener and the accessibility services `notify/CallWatcherService.kt` (light: notification
+  events only, so banking apps tolerate it) and `CallWatcherFullService` (adds window content and
+  key filtering). Tested on HyperOS: the listener gets WhatsApp messages and missed-call
+  notifications but never the ringing one, locked or unlocked.
 - VIP ringing is our own MediaPlayer on the alarm stream (`alert/Ringer.kt`) inside a
   foreground service (`alert/RingService.kt`). Don't go back to ringing via notification sounds
   with alarm attributes: tested on a real HyperOS phone, silent mode muted them.

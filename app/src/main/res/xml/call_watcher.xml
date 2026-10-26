@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only calling apps' events reach the watcher. Key filtering (to let a volume press silence a
-     VIP ring) is switched on by the service only while a VIP is ringing. -->
+<!-- The light call watcher: only calling apps' notification events. It can't read the screen or
+     intercept keys, which many banking apps tolerate. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeNotificationStateChanged|typeWindowStateChanged"
+    android:accessibilityEventTypes="typeNotificationStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:canRequestFilterKeyEvents="true"
-    android:canRetrieveWindowContent="true"
     android:description="@string/call_watcher_description"
     android:notificationTimeout="100"
     android:packageNames="com.whatsapp,com.whatsapp.w4b,org.thoughtcrime.securesms,org.telegram.messenger,com.facebook.orca,com.viber.voip,com.skype.raider,com.microsoft.teams,com.google.android.apps.tachyon" />

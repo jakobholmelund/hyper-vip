@@ -40,7 +40,7 @@ AppVerifier. Don't install an APK with a different fingerprint.
 | Notifications | Shows who's calling while a VIP rings, with a **Silence** button. |
 | Battery: no restrictions | Otherwise HyperOS puts the app to sleep and it misses calls. If the standard prompt does nothing, use **HyperOS settings** and pick **No restrictions**. |
 | Autostart | HyperOS only delivers incoming-call events to apps with Autostart on. Android can't check this, so tap **It's on** once you've enabled it. |
-| Accessibility (recommended) | HyperOS doesn't pass WhatsApp's ringing notification to notification access. The *Hyper VIP call watcher* accessibility service sees it instead, only for calling apps. While a VIP rings, a volume button press silences it. |
+| Accessibility (recommended) | HyperOS doesn't pass WhatsApp's ringing notification to notification access, so WhatsApp-style calls need one of two accessibility watchers. *Hyper VIP call watcher* (light) only receives calling apps' notifications and can't read the screen, so most banking apps still open. *Hyper VIP call watcher (full)* also reads the locked call screen and lets a volume button silence the ring, but some banking apps refuse to run while it's on. Turn on one, not both. |
 | Notification access (recommended) | Needed for VIP message alerts, and stops a VIP ring when a calling app reports a missed call. It also keeps the app alive on HyperOS. |
 | Do Not Disturb access (optional) | Only needed if your Do Not Disturb blocks alarms or uses *Total silence*. |
 

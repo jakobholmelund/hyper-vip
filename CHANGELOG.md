@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2
+
+- HyperOS doesn't give notification access the ringing notification for WhatsApp-style calls, so
+  those still need an accessibility watcher. There are now two to choose from:
+  - **Hyper VIP call watcher** (light): only receives calling apps' notifications. It can't read
+    the screen or intercept keys, so most banking apps still open.
+  - **Hyper VIP call watcher (full)**: also reads the locked call screen and lets a volume button
+    silence the ring.
+
 ## 1.0.1
 
 - Accessibility is now an optional backup. Some banking apps refuse to open while any
