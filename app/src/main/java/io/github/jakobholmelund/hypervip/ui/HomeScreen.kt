@@ -317,7 +317,7 @@ private fun AlertsCard(settings: AppSettings) {
         Spacer(Modifier.height(8.dp))
         SwitchRow(
             title = "Calls in other apps",
-            description = "WhatsApp, Signal, Telegram and other calling apps. Needs the accessibility call watcher.",
+            description = "WhatsApp, Signal, Telegram and other calling apps. Needs notification access.",
             checked = settings.appCallAlerts,
         ) { on -> SettingsStore.update(context) { it.copy(appCallAlerts = on) } }
         SwitchRow(

@@ -40,8 +40,8 @@ AppVerifier. Don't install an APK with a different fingerprint.
 | Notifications | Shows who's calling while a VIP rings, with a **Silence** button. |
 | Battery: no restrictions | Otherwise HyperOS puts the app to sleep and it misses calls. If the standard prompt does nothing, use **HyperOS settings** and pick **No restrictions**. |
 | Autostart | HyperOS only delivers incoming-call events to apps with Autostart on. Android can't check this, so tap **It's on** once you've enabled it. |
-| Accessibility (recommended) | HyperOS doesn't pass WhatsApp's ringing notification to notification access, so WhatsApp-style calls need one of two accessibility watchers. *Hyper VIP call watcher* (light) only receives calling apps' notifications and can't read the screen, so most banking apps still open. *Hyper VIP call watcher (full)* also reads the locked call screen and lets a volume button silence the ring, but some banking apps refuse to run while it's on. Turn on one, not both. |
-| Notification access (recommended) | Needed for VIP message alerts, and stops a VIP ring when a calling app reports a missed call. It also keeps the app alive on HyperOS. |
+| Notification access (recommended) | Catches VIP calls in WhatsApp, Signal and Telegram, and VIP messages. It also keeps the app alive on HyperOS. |
+| Accessibility (optional backup) | Not needed on HyperOS with notification access on. If app calls still don't ring on your phone, turn on one of two watchers: *Hyper VIP call watcher* (light: only calling apps' notifications, can't read the screen, so most banking apps still open) or *Hyper VIP call watcher (full)* (also reads the locked call screen and lets a volume button silence the ring). Some banking apps refuse to run while an accessibility service is on. |
 | Do Not Disturb access (optional) | Only needed if your Do Not Disturb blocks alarms or uses *Total silence*. |
 
 If HyperOS greys out a switch as a **Restricted setting** (this happens for sideloaded apps),
@@ -70,16 +70,19 @@ let through, so Hyper VIP rings on the alarm channel:
    switched to *alarms only* for the length of the ring and then restored.
 
 For other apps, a notification listener spots incoming-call notifications (`CATEGORY_CALL`) and
-messages from VIPs. Calls ring through whenever silent mode or any Do Not Disturb mode is on,
+messages from VIPs. HyperOS doesn't *deliver* WhatsApp's ringing notification to listeners as it's
+posted, but it does include it in the list of notifications currently showing, so Hyper VIP checks
+that list whenever notifications change. When the call notification leaves the list (declined,
+answered or given up), the ring stops. Calls ring through whenever silent mode or any Do Not Disturb mode is on,
 because Do Not Disturb can mute a calling app's own ringtone even when it lets the notification
 through. Messages only alert if Do Not Disturb or silent mode held them back.
 
 ### Battery use
 
 Hyper VIP has no background service, timer or wakelock. It only runs when Android hands it an
-event: a call-state broadcast, a notification, or an accessibility event from a calling app (the
-accessibility service is limited to those apps, and only intercepts volume buttons while a VIP is
-ringing). The foreground service exists only while a VIP rings. HyperOS's "No restrictions"
+event: a call-state broadcast or a notification change (or, if you turned on the optional
+accessibility watcher, an event from a calling app). Checking the list of showing notifications
+after a change is a single quick request to the system. The foreground service exists only while a VIP rings. HyperOS's "No restrictions"
 battery setting is needed so that service may start from the background; it doesn't make the
 app use more power.
 
@@ -93,8 +96,6 @@ ring.
 
 ### Known limitations
 
-- Declining a VIP's WhatsApp, Signal or Telegram call on the app's own screen doesn't stop
-  Hyper VIP's ring (Android doesn't tell other apps). Press a volume button or tap **Silence**.
 - Only tested on HyperOS. Dual-SIM phones should work but haven't been tested.
 - Hyper VIP is in English only.
 

@@ -16,11 +16,12 @@
   Kotlin/JVM project, without the Android SDK.
 - `targetSdk` stays at 34 on purpose (see README, "Why targetSdk is 34"). Lint's
   `ExpiredTargetSdkVersion` is disabled for that reason.
-- App calls (WhatsApp etc.) are handled in `notify/AppCalls.kt`, fed by both the notification
-  listener and the accessibility services `notify/CallWatcherService.kt` (light: notification
-  events only, so banking apps tolerate it) and `CallWatcherFullService` (adds window content and
-  key filtering). Tested on HyperOS: the listener gets WhatsApp messages and missed-call
-  notifications but never the ringing one, locked or unlocked.
+- App calls (WhatsApp etc.) are handled in `notify/AppCalls.kt`. Tested on a Xiaomi 15 Ultra
+  (HyperOS): `onNotificationPosted` never receives WhatsApp's ringing notification, but
+  `getActiveNotifications()` lists it, so `VipNotificationListener` scans that list after every
+  ranking update. This works without accessibility, which matters because banking apps refuse
+  to open while one is on. The accessibility watchers (`notify/CallWatcherService.kt` light,
+  `CallWatcherFullService` full) are only an optional backup.
 - VIP ringing is our own MediaPlayer on the alarm stream (`alert/Ringer.kt`) inside a
   foreground service (`alert/RingService.kt`). Don't go back to ringing via notification sounds
   with alarm attributes: tested on a real HyperOS phone, silent mode muted them.

@@ -93,22 +93,21 @@ object SetupChecks {
         items += SetupItem(
             key = "listener",
             title = "Notification access",
-            description = "Alerts you to VIPs' messages and stops a VIP ring when a call app reports a " +
-                "missed call. It also keeps Hyper VIP running reliably on HyperOS.",
+            description = "Lets VIPs ring through on WhatsApp, Signal and Telegram calls and alerts you " +
+                "to their messages. It also keeps Hyper VIP running reliably on HyperOS.",
             need = Need.RECOMMENDED,
             done = nm.isNotificationListenerAccessGranted(ComponentName(context, VipNotificationListener::class.java)),
             action = SystemSettings::openNotificationAccess,
         )
         items += SetupItem(
             key = "accessibility",
-            title = "Accessibility: catch WhatsApp calls",
-            description = "HyperOS hides WhatsApp's ringing notification from notification access, so VIP " +
-                "calls in WhatsApp, Signal and Telegram need an accessibility watcher. Turn on ONE of them " +
-                "under Accessibility → Downloaded apps: “Hyper VIP call watcher” (light: can't read the " +
-                "screen, so most banking apps still open) or “… (full)” (also reads the locked call screen " +
-                "and lets a volume button silence the ring). If greyed out, App info → ⋮ → Allow restricted " +
-                "settings first.",
-            need = Need.RECOMMENDED,
+            title = "Accessibility: backup for app calls",
+            description = "Not needed when notification access is on: it catches WhatsApp, Signal and " +
+                "Telegram calls by itself. Only if those calls still don't ring, turn on ONE watcher under " +
+                "Accessibility → Downloaded apps: “Hyper VIP call watcher” (light: can't read the screen, " +
+                "so most banking apps still open) or “… (full)”. Some banking apps refuse to open while " +
+                "an accessibility service is on.",
+            need = Need.OPTIONAL,
             done = CallWatcherService.isEnabled(context),
             actionLabel = "Open",
             action = SystemSettings::openAccessibility,

@@ -7,6 +7,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.telephony.TelephonyManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.StatusBarNotification
@@ -20,15 +21,18 @@ import io.github.jakobholmelund.hypervip.data.SettingsStore
 import io.github.jakobholmelund.hypervip.match.VipMatcher
 
 /**
- * Watches other apps' notifications for VIP messages, and for VIP calls where the system passes
- * them on (HyperOS doesn't for WhatsApp; see [CallWatcherService]). Being bound by the system
- * also keeps Hyper VIP's process alive, which helps on HyperOS.
+ * Watches other apps' notifications for VIP calls (WhatsApp, Signal, Telegram, …) and messages.
+ * On HyperOS, WhatsApp's ringing notification is only visible in the active-notification list,
+ * not as a posted notification, so calls are also found by checking that list. Being bound by
+ * the system also keeps Hyper VIP's process alive, which helps on HyperOS.
  */
 class VipNotificationListener : NotificationListenerService() {
     private val lastMessageAlert = HashMap<String, Long>()
     private val handler = Handler(Looper.getMainLooper())
     private val scanAfterChange = Runnable { scanActiveForCalls() }
     private var modeListener: AudioManager.OnModeChangedListener? = null
+    /** Calling apps whose call notification was in the list at the last check. */
+    private var callAppsShowing = emptySet<String>()
 
     override fun onListenerConnected() {
         connected = true
@@ -47,9 +51,9 @@ class VipNotificationListener : NotificationListenerService() {
     }
 
     /**
-     * HyperOS doesn't send us WhatsApp's ringing notification as it's posted. It might still be
-     * in the list of notifications currently showing, so check that list whenever notifications
-     * change (a ranking update follows every post) and when the phone's audio starts ringing.
+     * HyperOS doesn't send us WhatsApp's ringing notification as it's posted, but it does include
+     * it in the list of notifications currently showing (tested on a Xiaomi 15 Ultra). So check
+     * that list whenever notifications change: a ranking update follows every post and removal.
      */
     override fun onNotificationRankingUpdate(rankingMap: RankingMap) {
         handler.removeCallbacks(scanAfterChange)
@@ -58,27 +62,40 @@ class VipNotificationListener : NotificationListenerService() {
 
     private fun onAudioModeChanged(mode: Int) {
         if (mode != AudioManager.MODE_RINGTONE) return
-        val found = scanActiveForCalls()
-        // A ringing phone with no cellular call means a calling app is ringing.
-        if (found == 0 && CallTracker.state(this) == android.telephony.TelephonyManager.EXTRA_STATE_IDLE) {
-            EventLog.log(this, "An app call is ringing, but no call notification is visible to Hyper VIP")
-        }
+        scanActiveForCalls()
+        // The app's notification can appear a moment after the phone starts ringing, so only
+        // report a missing one if it still isn't there shortly after.
+        handler.postDelayed({
+            val ringingForApp = CallTracker.state(this) == TelephonyManager.EXTRA_STATE_IDLE &&
+                getSystemService(AudioManager::class.java).mode == AudioManager.MODE_RINGTONE
+            if (scanActiveForCalls() == 0 && ringingForApp) {
+                EventLog.log(this, "An app call is ringing, but no call notification is visible to Hyper VIP")
+            }
+        }, MISSING_CALL_CHECK_MS)
     }
 
-    /** Returns how many calling-app call notifications are showing. */
+    /**
+     * Handles calling-app call notifications in the current list, and stops a VIP ring once its
+     * app's call notification has left the list (declined, answered on another device, or
+     * given up). Returns how many call notifications are showing.
+     */
     private fun scanActiveForCalls(): Int {
         val settings = SettingsStore.get(this)
         if (!settings.enabled || !settings.appCallAlerts) return 0
         val active = runCatching { activeNotifications }.getOrNull() ?: return 0
-        var found = 0
+        val showing = mutableSetOf<String>()
         for (sbn in active) {
             if (sbn.packageName !in AppCalls.APP_NAMES) continue
             val notification = sbn.notification ?: continue
             if (!AppCalls.isCallNotification(sbn.packageName, notification)) continue
-            found++
+            showing += sbn.packageName
             AppCalls.onCallNotification(this, sbn.packageName, notification, "scan:${sbn.key}", via = AppCalls.Route.NOTIFICATION_SCAN)
         }
-        return found
+        for (gone in callAppsShowing - showing) {
+            VipAlerts.stopAlert(this, "call ended", onlySource = VipAlerts.Source.APP, onlyAppKey = gone)
+        }
+        callAppsShowing = showing
+        return showing.size
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -147,6 +164,7 @@ class VipNotificationListener : NotificationListenerService() {
 
         private const val MESSAGE_COOLDOWN_MS = 20_000L
         private const val SCAN_DEBOUNCE_MS = 300L
+        private const val MISSING_CALL_CHECK_MS = 1_500L
 
         /** HyperOS sometimes drops the listener's binding; ask for it back if access is granted. */
         fun ensureBound(context: Context) {

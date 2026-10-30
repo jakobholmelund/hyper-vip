@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- WhatsApp, Signal and Telegram calls from VIPs ring through **without accessibility**.
+  HyperOS doesn't announce their ringing notification to notification access, but it does list
+  it among the notifications showing, and Hyper VIP now checks that list. Accessibility watchers
+  are only an optional backup, so banking apps keep working.
+- Declining a VIP's app call (or the caller hanging up) now stops Hyper VIP's ring.
+- Fixed a misleading "no call notification is visible" log line that appeared when the call
+  notification simply showed up a moment after the phone started ringing.
+
 ## 1.0.3
 
 - Experiment: besides being told about new notifications, notification access now also checks
